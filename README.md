@@ -1,4 +1,4 @@
-# Init Harness Engineering Skill 🤖
+# OpenAI Harness Engineering Skill 🤖
 
 A unified, multi-agent skill that brings the **OpenAI Harness Engineering** architecture and **Andrej Karpathy's LLM Guidelines** directly into your coding environment. This skill automatically generates a machine-readable "Constitution" for your repository, making your codebase highly legible for AI agents and enforcing strict developmental discipline.
 
@@ -21,7 +21,7 @@ This skill solves that by generating an **Agent Constitution**—a set of founda
 
 ## ✨ Features
 
-When invoked, the `init-harness-engineering` skill acts conversationally. It asks for your project details (Name, Tech Stack, Primary Agent) and then generates the following "System of Record":
+When invoked, the `openai-harness-engineering` skill acts conversationally. It asks for your project details (Name, Tech Stack, Primary Agent) and then generates the following "System of Record":
 
 ### 1. Progressive Disclosure (`AGENTS.md`)
 Instead of a monolithic prompt file that rots over time, it generates a lightweight `AGENTS.md` that serves purely as a Table of Contents. It directs your AI to deep-dive into specific `docs/` folders for context, preventing prompt overload.
@@ -54,19 +54,19 @@ In Claude Code, add the plugin marketplace and install:
 /plugin marketplace add wangxumarshall/init-harness-skill-using-openai-method
 /plugin install init-harness-skill-using-openai-method@harness-engineering-skills
 ```
-**Usage**: Simply type: *"Run init-harness-engineering"* in your Claude Code prompt. The agent will ask you for your project details and generate the framework.
+**Usage**: Simply type: *"Run openai-harness-engineering"* in your Claude Code prompt. The agent will ask you for your project details and generate the framework.
 
 ### Option B: Cursor Users (MDC Rules)
 This repository contains a pre-committed Cursor rule. You can install it directly into your project:
 ```bash
 mkdir -p .cursor/rules
-curl -o .cursor/rules/init-harness-engineering.mdc https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/.cursor/rules/init-harness-engineering.mdc
+curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/.cursor/rules/openai-harness-engineering.mdc
 ```
 **Usage**: Just ask Cursor (Cmd+L or Cmd+K) to: *"Initialize the harness scaffolding for this project."* Cursor will automatically read the `.mdc` file and trigger the interactive process.
 
 ### Option C: Manual Setup (Trae, Gemini, OpenCode, etc.)
 You can copy the raw skill prompt and paste it into any agent's context:
-1. Copy the contents of [`skills/init-harness-engineering/SKILL.md`](./skills/init-harness-engineering/SKILL.md).
+1. Copy the contents of [`skills/openai-harness-engineering/SKILL.md`](./skills/openai-harness-engineering/SKILL.md).
 2. Paste it into your agent's system prompt or chat interface.
 
 ---
