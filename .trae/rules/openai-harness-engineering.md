@@ -1,6 +1,6 @@
 # OpenAI Harness Engineering
 
-When the user asks to initialize harness engineering, scaffolding, or agent constitution, you MUST carefully read and execute all the instructions located in the following file:
+When the user asks for Harness Engineering, agent scaffolding, AGENTS.md, project constitution, persistent execution plans, or long-running agent workflows, carefully read and execute the instructions in:
 `skills/openai-harness-engineering/SKILL.md`
 
-Do not generate any files or make any assumptions until you have completely read that file.
+Do not duplicate those instructions here. Preserve existing project docs unless the user explicitly asks to overwrite.

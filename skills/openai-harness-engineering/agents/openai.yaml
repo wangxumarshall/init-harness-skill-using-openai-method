@@ -1,0 +1,7 @@
+interface:
+  display_name: "OpenAI Harness Engineering"
+  short_description: "Build durable agent-first project harnesses"
+  default_prompt: "Use $openai-harness-engineering to initialize or audit this repo's agent harness."
+
+policy:
+  allow_implicit_invocation: true
