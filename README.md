@@ -52,8 +52,8 @@ This skill is designed to be cross-platform and natively compatible with the mos
 ### Option A: Claude Code (Plugin Marketplace)
 In Claude Code, add the plugin marketplace and install:
 ```bash
-/plugin marketplace add wangxumarshall/init-harness-skill-using-openai-method
-/plugin install init-harness-skill-using-openai-method@harness-engineering-skills
+/plugin marketplace add wangxumarshall/openai-harness-engineering
+/plugin install openai-harness-engineering@harness-engineering-skills
 ```
 **Usage**: Simply type: *"Run openai-harness-engineering"* in your Claude Code prompt. The agent will ask you for your project details and generate the framework.
 
@@ -61,7 +61,7 @@ In Claude Code, add the plugin marketplace and install:
 This repository contains a pre-committed Cursor rule. You can install it directly into your project:
 ```bash
 mkdir -p .cursor/rules
-curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/.cursor/rules/openai-harness-engineering.mdc
+curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/skills/openai-harness-engineering/SKILL.md
 ```
 **Usage**: Just ask Cursor (Cmd+L or Cmd+K) to: *"Initialize the harness scaffolding for this project."* Cursor will automatically read the `.mdc` file and trigger the interactive process.
 
@@ -69,7 +69,7 @@ curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubuserconte
 Trae IDE uses a `.trae/rules/` directory similar to Cursor. The Trae CLI (`trae-agent`) can also be directed to ingest these markdown files for behavioral constraints. We have pre-committed a Trae rule for you:
 ```bash
 mkdir -p .trae/rules
-curl -o .trae/rules/openai-harness-engineering.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/.trae/rules/openai-harness-engineering.md
+curl -o .trae/rules/openai-harness-engineering.md https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/skills/openai-harness-engineering/SKILL.md
 ```
 **Usage**: 
 - **Trae IDE**: Just ask Trae in the chat panel to: *"Initialize the harness scaffolding for this project."* Trae will read the rule and begin the interactive setup.
@@ -79,7 +79,7 @@ curl -o .trae/rules/openai-harness-engineering.md https://raw.githubusercontent.
 OpenCode natively supports Agent Skills via the `SKILL.md` format. You can install this globally for all your OpenCode projects:
 ```bash
 mkdir -p ~/.config/opencode/skills/openai-harness-engineering
-curl -o ~/.config/opencode/skills/openai-harness-engineering/SKILL.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/skills/openai-harness-engineering/SKILL.md
+curl -o ~/.config/opencode/skills/openai-harness-engineering/SKILL.md https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/skills/openai-harness-engineering/SKILL.md
 ```
 **Usage**: In OpenCode, trigger the skill by asking the agent to *"Run the openai-harness-engineering skill."*
 
@@ -87,7 +87,7 @@ curl -o ~/.config/opencode/skills/openai-harness-engineering/SKILL.md https://ra
 Gemini Antigravity agents inherently support this skill structure. Install it locally:
 ```bash
 mkdir -p ~/.gemini/antigravity/skills/openai-harness-engineering
-curl -o ~/.gemini/antigravity/skills/openai-harness-engineering/SKILL.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/skills/openai-harness-engineering/SKILL.md
+curl -o ~/.gemini/antigravity/skills/openai-harness-engineering/SKILL.md https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/skills/openai-harness-engineering/SKILL.md
 ```
 **Usage**: Mention to Gemini: *"Run openai-harness-engineering."*
 
@@ -96,7 +96,7 @@ The Codex ecosystem (both the IDE extension and the CLI) uses the Open Agent Ski
 
 **Plugin Marketplace Installation (Codex CLI):**
 ```bash
-codex plugin marketplace add wangxumarshall/init-harness-skill-using-openai-method
+codex plugin marketplace add wangxumarshall/openai-harness-engineering
 codex plugin install openai-harness-engineering
 ```
 *(For manual project installation without the marketplace, you can still symlink or copy `skills/openai-harness-engineering/SKILL.md` to your `.codex/skills/` directory).*
