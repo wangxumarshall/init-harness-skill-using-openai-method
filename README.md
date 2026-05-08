@@ -94,12 +94,12 @@ curl -o ~/.gemini/antigravity/skills/openai-harness-engineering/SKILL.md https:/
 ### Option F: Codex IDE & Codex CLI Users
 The Codex ecosystem (both the IDE extension and the CLI) uses the Open Agent Skills standard. You can install this skill globally or at the project level.
 
-**Project-Level Installation:**
+**Plugin Marketplace Installation (Codex CLI):**
 ```bash
-mkdir -p .codex/skills/openai-harness-engineering
-curl -o .codex/skills/openai-harness-engineering/SKILL.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/skills/openai-harness-engineering/SKILL.md
+codex plugin marketplace add wangxumarshall/init-harness-skill-using-openai-method
+codex plugin install openai-harness-engineering
 ```
-*(For global installation, use `~/.codex/skills/...` instead).*
+*(For manual project installation without the marketplace, you can still symlink or copy `skills/openai-harness-engineering/SKILL.md` to your `.codex/skills/` directory).*
 
 **Usage**: 
 - **Codex IDE**: Type `/skills openai-harness-engineering` in the chat, or invoke it contextually.
