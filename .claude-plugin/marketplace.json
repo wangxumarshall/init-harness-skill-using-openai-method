@@ -1,0 +1,29 @@
+{
+  "name": "harness-engineering-skills",
+  "id": "harness-engineering-skills",
+  "owner": {
+    "name": "wangxumarshall"
+  },
+  "metadata": {
+    "description": "Initializes an Agent-First scaffolding based on OpenAI's Harness Engineering and Andrej Karpathy's LLM Guidelines",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "init-harness-engineering",
+      "source": "./",
+      "description": "Agent-First scaffolding generator based on OpenAI Harness and Karpathy rules",
+      "version": "1.0.0",
+      "author": {
+        "name": "wangxumarshall"
+      },
+      "keywords": [
+        "harness",
+        "agent",
+        "scaffolding",
+        "karpathy"
+      ],
+      "category": "workflow"
+    }
+  ]
+}
