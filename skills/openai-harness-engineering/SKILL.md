@@ -4,7 +4,7 @@ description: Initializes an Agent-First scaffolding and knowledge base template 
 license: MIT
 ---
 
-# Init Harness Engineering Skill
+# 🤖 OpenAI Harness Engineering Skill
 
 ## Core Beliefs
 
