@@ -1,0 +1,11 @@
+{
+  "name": "openai-harness-engineering",
+  "description": "Initializes an Agent-First scaffolding and knowledge base template (Constitution Framework) for a new or existing project, based on OpenAI's Harness Engineering concepts and Andrej Karpathy's LLM Guidelines.",
+  "version": "1.0.0",
+  "author": {
+    "name": "wangxumarshall"
+  },
+  "license": "MIT",
+  "keywords": ["harness", "agent-first", "guidelines", "karpathy", "scaffolding"],
+  "skills": ["./skills/openai-harness-engineering"]
+}
