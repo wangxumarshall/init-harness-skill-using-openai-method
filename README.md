@@ -64,13 +64,15 @@ curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubuserconte
 ```
 **Usage**: Just ask Cursor (Cmd+L or Cmd+K) to: *"Initialize the harness scaffolding for this project."* Cursor will automatically read the `.mdc` file and trigger the interactive process.
 
-### Option C: Trae IDE Users
-Trae IDE uses a `.trae/rules/` directory similar to Cursor. We have pre-committed a Trae rule for you:
+### Option C: Trae IDE & Trae CLI Users
+Trae IDE uses a `.trae/rules/` directory similar to Cursor. The Trae CLI (`trae-agent`) can also be directed to ingest these markdown files for behavioral constraints. We have pre-committed a Trae rule for you:
 ```bash
 mkdir -p .trae/rules
 curl -o .trae/rules/openai-harness-engineering.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/.trae/rules/openai-harness-engineering.md
 ```
-**Usage**: Just ask Trae in the chat panel to: *"Initialize the harness scaffolding for this project."* Trae will read the rule and begin the interactive setup.
+**Usage**: 
+- **Trae IDE**: Just ask Trae in the chat panel to: *"Initialize the harness scaffolding for this project."* Trae will read the rule and begin the interactive setup.
+- **Trae CLI**: You can reference the rule directly in your CLI execution or configuration to ensure the autonomous agent follows the harness constraints.
 
 ### Option D: OpenCode Users
 OpenCode natively supports Agent Skills via the `SKILL.md` format. You can install this globally for all your OpenCode projects:
@@ -88,7 +90,21 @@ curl -o ~/.gemini/antigravity/skills/openai-harness-engineering/SKILL.md https:/
 ```
 **Usage**: Mention to Gemini: *"Run openai-harness-engineering."*
 
-### Option F: Manual Setup (Any other agent)
+### Option F: Codex IDE & Codex CLI Users
+The Codex ecosystem (both the IDE extension and the CLI) uses the Open Agent Skills standard. You can install this skill globally or at the project level.
+
+**Project-Level Installation:**
+```bash
+mkdir -p .codex/skills/openai-harness-engineering
+curl -o .codex/skills/openai-harness-engineering/SKILL.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/skills/openai-harness-engineering/SKILL.md
+```
+*(For global installation, use `~/.codex/skills/...` instead).*
+
+**Usage**: 
+- **Codex IDE**: Type `/skills openai-harness-engineering` in the chat, or invoke it contextually.
+- **Codex CLI**: Ensure skills are enabled (`codex --enable skills`) and invoke it via `$openai-harness-engineering`.
+
+### Option G: Manual Setup (Any other agent)
 You can copy the raw skill prompt and paste it into any agent's context:
 1. Copy the contents of [`skills/openai-harness-engineering/SKILL.md`](./skills/openai-harness-engineering/SKILL.md).
 2. Paste it into your agent's system prompt or chat interface.
