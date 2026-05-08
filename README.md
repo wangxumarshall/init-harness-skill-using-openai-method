@@ -1,9 +1,10 @@
-# OpenAI Harness Engineering Skill 🤖
+# OpenAI Harness Engineering Skill
 
 A unified, multi-agent skill that brings the **OpenAI Harness Engineering** architecture and **Andrej Karpathy's LLM Guidelines** directly into your coding environment. This skill automatically generates a machine-readable "Constitution" for your repository, making your codebase highly legible for AI agents and enforcing strict developmental discipline.
 
 > **Read the origin of these concepts:** 
 > [Harness engineering: leveraging Codex in an agent-first world | OpenAI](https://openai.com/index/harness-engineering/)
+> [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills/tree/main)
 
 ---
 
