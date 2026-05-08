@@ -3,17 +3,8 @@ description: Automatically triggers when a user wants to initialize a Harness En
 globs: 
 ---
 # OpenAI Harness Engineering
-When the user asks to initialize harness engineering, scaffolding, or agent constitution, follow these rules:
 
-1. DO NOT generate files immediately.
-2. Ask the user for `PROJECT_NAME`, `PROJECT_DESC`, `TECH_STACK`, `CORE_DOMAINS`, and `CODING_AGENT` (e.g., Cursor, Claude).
-3. Once answered, create `docs/` structure: `design-docs/`, `exec-plans/active/`, `exec-plans/completed/`, `generated/`, `product-specs/`, `references/`.
-4. Generate `AGENTS.md` (Table of Contents only).
-5. Generate `ARCHITECTURE.md` (Strict layers, mechanical enforcement of linters with remediation instructions).
-6. Generate `docs/design-docs/core-beliefs.md` (No manual code, Repo is source of truth, Parse shapes at boundaries, Shared utilities over ad-hoc helpers).
-7. Generate `DESIGN.md`, ensuring it embeds the 4 Andrej Karpathy LLM Rules: 
-   - Think Before Coding
-   - Simplicity First
-   - Surgical Changes
-   - Goal-Driven Execution
-8. Generate skeletons for `FRONTEND.md`/`BACKEND.md`, `PLANS.md`, `PRODUCT_SENSE.md`, `QUALITY_SCORE.md`, `RELIABILITY.md` (Ephemeral environments), `SECURITY.md`.
+To initialize the harness engineering scaffolding, you MUST carefully read and execute all the instructions located in the following file:
+`skills/openai-harness-engineering/SKILL.md`
+
+Do not generate any files or make any assumptions until you have completely read that file.
