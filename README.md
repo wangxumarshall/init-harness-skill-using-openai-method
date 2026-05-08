@@ -61,7 +61,7 @@ In Claude Code, add the plugin marketplace and install:
 This repository contains a pre-committed Cursor rule. You can install it directly into your project:
 ```bash
 mkdir -p .cursor/rules
-curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/skills/openai-harness-engineering/SKILL.md
+curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/.cursor/rules/openai-harness-engineering.mdc
 ```
 **Usage**: Just ask Cursor (Cmd+L or Cmd+K) to: *"Initialize the harness scaffolding for this project."* Cursor will automatically read the `.mdc` file and trigger the interactive process.
 
@@ -69,7 +69,7 @@ curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubuserconte
 Trae IDE uses a `.trae/rules/` directory similar to Cursor. The Trae CLI (`trae-agent`) can also be directed to ingest these markdown files for behavioral constraints. We have pre-committed a Trae rule for you:
 ```bash
 mkdir -p .trae/rules
-curl -o .trae/rules/openai-harness-engineering.md https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/skills/openai-harness-engineering/SKILL.md
+curl -o .trae/rules/openai-harness-engineering.md https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/.trae/rules/openai-harness-engineering.md
 ```
 **Usage**: 
 - **Trae IDE**: Just ask Trae in the chat panel to: *"Initialize the harness scaffolding for this project."* Trae will read the rule and begin the interactive setup.
