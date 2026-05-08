@@ -1,10 +1,10 @@
 ---
-description: Automatically triggers when a user wants to initialize a Harness Engineering framework or asks for agent scaffolding. Guides the creation of the Harness constitution.
+description: Triggers when a user wants to initialize, audit, or operate an OpenAI-style Harness Engineering framework for agent-first software work.
 globs: 
 ---
 # OpenAI Harness Engineering
 
-To initialize the harness engineering scaffolding, you MUST carefully read and execute all the instructions located in the following file:
+When the user asks for Harness Engineering, agent scaffolding, AGENTS.md, project constitution, persistent execution plans, or long-running agent workflows, carefully read and execute the instructions in:
 `skills/openai-harness-engineering/SKILL.md`
 
-Do not generate any files or make any assumptions until you have completely read that file.
+Do not duplicate those instructions here. Preserve existing project docs unless the user explicitly asks to overwrite.
