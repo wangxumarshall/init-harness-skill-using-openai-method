@@ -2,7 +2,7 @@
 description: Automatically triggers when a user wants to initialize a Harness Engineering framework or asks for agent scaffolding. Guides the creation of the Harness constitution.
 globs: 
 ---
-# Init Harness Engineering
+# OpenAI Harness Engineering
 When the user asks to initialize harness engineering, scaffolding, or agent constitution, follow these rules:
 
 1. DO NOT generate files immediately.

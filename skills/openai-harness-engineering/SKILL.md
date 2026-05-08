@@ -1,12 +1,12 @@
 ---
-name: init-harness-engineering
+name: openai-harness-engineering
 description: Initializes an Agent-First scaffolding and knowledge base template (Constitution Framework) for a new or existing project, based on OpenAI's Harness Engineering concepts and Andrej Karpathy's LLM Guidelines.
 license: MIT
 ---
 
-# 🤖 Init Harness Engineering Skill
+# Init Harness Engineering Skill
 
-## 🌟 Core Beliefs
+## Core Beliefs
 
 This Skill is based on the **Harness Engineering** concept proposed by the OpenAI team in their article "Harness engineering: leveraging Codex in an agent-first world", fused with **Andrej Karpathy's LLM Coding Guidelines**.
 
@@ -59,13 +59,13 @@ Generate the following files one by one. Embody the **Progressive Disclosure** p
 Welcome to {{PROJECT_NAME}}. This repository is agent-generated and agent-maintained.
 This file is the table of contents for Agent operations. **DO NOT put detailed instructions here.**
 
-## 🗺️ System of Record
+## System of Record
 - [Architecture & Layers](./ARCHITECTURE.md)
 - [Design Principles](./DESIGN.md)
 - [Product Sense](./PRODUCT_SENSE.md)
 - [Quality & Linting](./QUALITY_SCORE.md)
 
-## 📁 Core Directories
+## Core Directories
 - `docs/design-docs/`: Core architecture design and Core Beliefs.
 - `docs/exec-plans/`: Active execution plans and Tech Debt Tracker.
 - `docs/product-specs/`: Requirements and product specs.
@@ -123,7 +123,7 @@ Once all templates are generated, output a summary to the user:
 2. Confirm that Harness initialization is complete.
 3. Advise the user to use other planning agents (e.g., `planning-with-files`) to populate `docs/exec-plans/` and start automated iterations.
 
-## 🚨 Critical Rules for You
+## Critical Rules for You
 1. **NEVER** stuff `AGENTS.md` with detailed business instructions.
 2. **MUST EMPHASIZE** mechanical enforcement of architecture (Linters/Tests > Plain text instructions).
 3. Write generated documents in Markdown format directly to the user's current working directory.

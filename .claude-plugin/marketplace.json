@@ -10,7 +10,7 @@
   },
   "plugins": [
     {
-      "name": "init-harness-engineering",
+      "name": "openai-harness-engineering",
       "source": "./",
       "description": "Agent-First scaffolding generator based on OpenAI Harness and Karpathy rules",
       "version": "1.0.0",
