@@ -64,7 +64,31 @@ curl -o .cursor/rules/openai-harness-engineering.mdc https://raw.githubuserconte
 ```
 **Usage**: Just ask Cursor (Cmd+L or Cmd+K) to: *"Initialize the harness scaffolding for this project."* Cursor will automatically read the `.mdc` file and trigger the interactive process.
 
-### Option C: Manual Setup (Trae, Gemini, OpenCode, etc.)
+### Option C: Trae IDE Users
+Trae IDE uses a `.trae/rules/` directory similar to Cursor. We have pre-committed a Trae rule for you:
+```bash
+mkdir -p .trae/rules
+curl -o .trae/rules/openai-harness-engineering.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/.trae/rules/openai-harness-engineering.md
+```
+**Usage**: Just ask Trae in the chat panel to: *"Initialize the harness scaffolding for this project."* Trae will read the rule and begin the interactive setup.
+
+### Option D: OpenCode Users
+OpenCode natively supports Agent Skills via the `SKILL.md` format. You can install this globally for all your OpenCode projects:
+```bash
+mkdir -p ~/.config/opencode/skills/openai-harness-engineering
+curl -o ~/.config/opencode/skills/openai-harness-engineering/SKILL.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/skills/openai-harness-engineering/SKILL.md
+```
+**Usage**: In OpenCode, trigger the skill by asking the agent to *"Run the openai-harness-engineering skill."*
+
+### Option E: Gemini (Antigravity) Users
+Gemini Antigravity agents inherently support this skill structure. Install it locally:
+```bash
+mkdir -p ~/.gemini/antigravity/skills/openai-harness-engineering
+curl -o ~/.gemini/antigravity/skills/openai-harness-engineering/SKILL.md https://raw.githubusercontent.com/wangxumarshall/init-harness-skill-using-openai-method/main/skills/openai-harness-engineering/SKILL.md
+```
+**Usage**: Mention to Gemini: *"Run openai-harness-engineering."*
+
+### Option F: Manual Setup (Any other agent)
 You can copy the raw skill prompt and paste it into any agent's context:
 1. Copy the contents of [`skills/openai-harness-engineering/SKILL.md`](./skills/openai-harness-engineering/SKILL.md).
 2. Paste it into your agent's system prompt or chat interface.
