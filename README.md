@@ -42,6 +42,8 @@ The boundary matters: record observable engineering facts, concise rationale, co
 - [Run long horizon tasks with Codex](https://developers.openai.com/blog/run-long-horizon-tasks-with-codex)
 - [Skills, shell tips, and compaction: lessons from real-world Codex use](https://developers.openai.com/blog/skills-shell-tips)
 - [Testing agent skills systematically with evals](https://developers.openai.com/blog/eval-skills)
+- [Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?](https://arxiv.org/html/2602.11988v1)
+- [On the Impact of AGENTS.md Files on the Efficiency of AI Coding Agents](https://arxiv.org/html/2601.20404v2)
 
 ## Core Capabilities
 
