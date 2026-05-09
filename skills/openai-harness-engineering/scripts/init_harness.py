@@ -105,7 +105,9 @@ def templates(ctx: HarnessContext) -> dict[str, str]:
         "docs/design-docs/core-beliefs.md": core_beliefs_md(ctx),
         "docs/runbooks/local-development.md": local_development_md(ctx),
         "docs/runbooks/debugging.md": debugging_md(ctx),
+        "docs/runbooks/runbook-template.md": runbook_template_md(ctx),
         "docs/validation/validation-log-template.md": validation_log_template_md(ctx),
+        "docs/incidents/incident-template.md": incident_template_md(ctx),
         "docs/adr/0001-agent-harness-constitution.md": adr_md(ctx),
     }
 
@@ -349,6 +351,8 @@ def plans_md(ctx: HarnessContext) -> str:
 
 `docs/exec-plans/` is the durable memory for long-running agent work. It lets `{ctx.primary_agent}` resume after context compaction, session restarts, branch switches, or review handoffs.
 
+Each active exec-plan is the trajectory index for a non-trivial task: the recoverable path from request, context, and plan through actions, decisions, validation, incidents, learnings, and closure. It is not a transcript and must not contain full chain-of-thought. Record externally visible engineering facts, concise rationale, commands, results, links, and handoff state.
+
 ## When To Create a Plan
 
 Create `docs/exec-plans/active/<task-slug>.md` when a task:
@@ -370,6 +374,7 @@ Small one-file fixes can skip a plan if the final response records validation.
 - Owner/agent: {ctx.primary_agent}
 - Started: {{YYYY-MM-DD}}
 - Last updated: {{YYYY-MM-DD}}
+- Trajectory role: exec-plan index
 
 ## User Request
 
@@ -387,19 +392,45 @@ Small one-file fixes can skip a plan if the final response records validation.
 
 {{RELEVANT_FILES_AND_DOCS}}
 
+## Context Read
+
+- {{FILE_OR_DOC}} - {{WHY_IT_MATTERS}}
+
 ## Plan
 
 1. {{STEP}}
 2. {{STEP}}
 3. {{STEP}}
 
+## Actions Taken
+
+- {{ACTION}} - {{FILES_OR_MODULES}}
+
 ## Decisions
 
 - {{DECISION}} - {{WHY}}
 
+## Decision Links
+
+- ADR: {{ADR_PATH_OR_NONE}}
+- Design doc/spec: {{DOC_PATH_OR_NONE}}
+
 ## Validation
 
 - [ ] `{{COMMAND}}` - {{EXPECTED_RESULT}}
+
+## Validation Evidence
+
+- Validation log: {{VALIDATION_LOG_PATH_OR_NONE}}
+- Summary: {{RESULT_SUMMARY}}
+
+## Incident Links
+
+- Incident: {{INCIDENT_PATH_OR_NONE}}
+
+## Learnings
+
+- {{LEARNING_OR_NONE}}
 
 ## Progress Log
 
@@ -412,6 +443,18 @@ Small one-file fixes can skip a plan if the final response records validation.
 ## Follow-Ups
 
 - {{FOLLOW_UP_OR_NONE}}
+
+## Closure Notes
+
+- Outcome: {{OUTCOME_OR_PENDING}}
+- Changed files/modules: {{CHANGED_FILES_OR_MODULES}}
+- Residual risk: {{RISK_OR_NONE}}
+
+## Next Agent Handoff
+
+- Current state: {{STATE}}
+- Next recommended action: {{NEXT_ACTION}}
+- Blockers: {{BLOCKERS_OR_NONE}}
 ```
 
 ## Closing Work
@@ -705,13 +748,15 @@ def validation_log_template_md(ctx: HarnessContext) -> str:
         h1("Validation Log Template")
         + f"""Use this template when a task has meaningful validation evidence that should survive the session.
 
+Validation logs are the evidence layer for an exec-plan-indexed trajectory. Summarize observable command results, artifacts, and residual risk. Do not paste secrets, credentials, sensitive payloads, or raw logs that contain private data.
+
 ```markdown
 # Validation: {{TASK_OR_CHANGE}}
 
 - Date: {{YYYY-MM-DD}}
 - Agent: {ctx.primary_agent}
 - Branch/worktree: {{BRANCH_OR_WORKTREE}}
-- Related plan: {{PLAN_PATH}}
+- Related exec-plan: {{EXEC_PLAN_PATH}}
 
 ## Commands
 
@@ -732,6 +777,104 @@ def validation_log_template_md(ctx: HarnessContext) -> str:
 ## Residual Risk
 
 - {{RISK_OR_NONE}}
+```
+"""
+    )
+
+
+def incident_template_md(ctx: HarnessContext) -> str:
+    return (
+        h1("Incident Record Template")
+        + f"""Use this template for user-impacting failures, data risk, availability issues, or trust-impacting regressions.
+
+Incident records are the failure branch of an exec-plan-indexed trajectory. Keep the record factual and auditable; link back to the active or completed exec-plan that drove the investigation or fix.
+
+```markdown
+# Incident: {{INCIDENT_TITLE}}
+
+- Status: open/resolved
+- Opened: {{YYYY-MM-DD}}
+- Owner/agent: {ctx.primary_agent}
+- Severity: {{SEVERITY}}
+- Related exec-plan: {{EXEC_PLAN_PATH}}
+
+## Impact
+
+{{WHO_OR_WHAT_WAS_AFFECTED}}
+
+## Timeline
+
+- {{TIMESTAMP}}: {{OBSERVED_FACT}}
+
+## Root Cause
+
+{{ROOT_CAUSE_OR_CURRENT_HYPOTHESIS}}
+
+## Fix
+
+{{FIX_SUMMARY}}
+
+## Validation Evidence
+
+- {{COMMAND_OR_CHECK}} - {{RESULT}}
+- Validation log: {{VALIDATION_LOG_PATH_OR_NONE}}
+
+## Prevention Follow-Ups
+
+- {{FOLLOW_UP_OR_NONE}}
+
+## Learnings
+
+- {{LEARNING_OR_NONE}}
+```
+"""
+    )
+
+
+def runbook_template_md(ctx: HarnessContext) -> str:
+    return (
+        h1("Runbook Template")
+        + f"""Use this template when repeated setup, debugging, operations, or recovery steps should become executable shared knowledge.
+
+Runbooks are the learned operation layer of an exec-plan-indexed trajectory. They should grow from completed plans, validation logs, and incident records when a workflow is likely to repeat.
+
+```markdown
+# Runbook: {{OPERATION_NAME}}
+
+- Owner/agent: {ctx.primary_agent}
+- Last verified: {{YYYY-MM-DD}}
+- Related exec-plan: {{EXEC_PLAN_PATH_OR_NONE}}
+- Related incident: {{INCIDENT_PATH_OR_NONE}}
+
+## Purpose
+
+{{WHAT_THIS_RUNBOOK_HELPS_AN_AGENT_DO}}
+
+## Prerequisites
+
+- {{REQUIRED_SERVICE_OR_CONTEXT}}
+
+## Procedure
+
+1. {{STEP}}
+2. {{STEP}}
+3. {{STEP}}
+
+## Validation
+
+- `{{COMMAND_OR_CHECK}}` - {{EXPECTED_RESULT}}
+
+## Rollback or Recovery
+
+- {{RECOVERY_STEP_OR_NONE}}
+
+## Common Failures
+
+- {{SYMPTOM}}: {{REMEDIATION}}
+
+## Learnings
+
+- {{LEARNING_OR_NONE}}
 ```
 """
     )
@@ -826,6 +969,26 @@ def write_manifest(
     dry_run: bool,
 ) -> tuple[str, str | None]:
     rel = "docs/generated/harness-manifest.json"
+    required_exec_plan_sections = [
+        "User Request",
+        "Goal",
+        "Non-Goals",
+        "Context",
+        "Context Read",
+        "Plan",
+        "Actions Taken",
+        "Decisions",
+        "Decision Links",
+        "Validation",
+        "Validation Evidence",
+        "Incident Links",
+        "Learnings",
+        "Progress Log",
+        "Open Questions",
+        "Follow-Ups",
+        "Closure Notes",
+        "Next Agent Handoff",
+    ]
     manifest = {
         "project_name": ctx.project_name,
         "project_description": ctx.project_description,
@@ -833,6 +996,17 @@ def write_manifest(
         "domains": ctx.domain_list,
         "primary_agent": ctx.primary_agent,
         "generated_on": ctx.generated_on,
+        "trajectory_model": "exec-plan-indexed",
+        "exec_plan_index_pattern": "docs/exec-plans/active/<task>.md -> docs/exec-plans/completed/<task>.md",
+        "trajectory_related_dirs": {
+            "context": ["AGENTS.md", "ARCHITECTURE.md", "PRODUCT_SENSE.md", "docs/references/"],
+            "plans": ["docs/exec-plans/active/", "docs/exec-plans/completed/"],
+            "decisions": ["docs/adr/", "docs/design-docs/"],
+            "validation": ["docs/validation/"],
+            "incidents": ["docs/incidents/"],
+            "learnings": ["docs/runbooks/"],
+        },
+        "required_exec_plan_sections": required_exec_plan_sections,
         "managed_root_files": ROOT_FILES,
         "managed_files": sorted(file_paths + [rel]),
         "note": "Generated by openai-harness-engineering. Existing files are preserved unless --force is used.",

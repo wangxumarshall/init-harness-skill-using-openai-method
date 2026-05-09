@@ -37,6 +37,7 @@ def plan_content(title: str, request: str, goal: str, agent: str, today: str) ->
 - Owner/agent: {agent}
 - Started: {today}
 - Last updated: {today}
+- Trajectory role: exec-plan index
 
 ## User Request
 
@@ -54,19 +55,45 @@ def plan_content(title: str, request: str, goal: str, agent: str, today: str) ->
 
 - {{RELEVANT_FILES_AND_DOCS}}
 
+## Context Read
+
+- {{FILE_OR_DOC}} - {{WHY_IT_MATTERS}}
+
 ## Plan
 
 1. {{STEP}}
 2. {{STEP}}
 3. {{STEP}}
 
+## Actions Taken
+
+- {{ACTION}} - {{FILES_OR_MODULES}}
+
 ## Decisions
 
 - {{DECISION}} - {{WHY}}
 
+## Decision Links
+
+- ADR: {{ADR_PATH_OR_NONE}}
+- Design doc/spec: {{DOC_PATH_OR_NONE}}
+
 ## Validation
 
 - [ ] `{{COMMAND}}` - {{EXPECTED_RESULT}}
+
+## Validation Evidence
+
+- Validation log: {{VALIDATION_LOG_PATH_OR_NONE}}
+- Summary: {{RESULT_SUMMARY}}
+
+## Incident Links
+
+- Incident: {{INCIDENT_PATH_OR_NONE}}
+
+## Learnings
+
+- {{LEARNING_OR_NONE}}
 
 ## Progress Log
 
@@ -79,6 +106,18 @@ def plan_content(title: str, request: str, goal: str, agent: str, today: str) ->
 ## Follow-Ups
 
 - {{FOLLOW_UP_OR_NONE}}
+
+## Closure Notes
+
+- Outcome: {{OUTCOME_OR_PENDING}}
+- Changed files/modules: {{CHANGED_FILES_OR_MODULES}}
+- Residual risk: {{RISK_OR_NONE}}
+
+## Next Agent Handoff
+
+- Current state: {{STATE}}
+- Next recommended action: {{NEXT_ACTION}}
+- Blockers: {{BLOCKERS_OR_NONE}}
 """
 
 

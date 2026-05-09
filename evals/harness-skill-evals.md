@@ -79,3 +79,22 @@ Expected:
 - Explains `Agent = Model + Harness`.
 - Connects harness quality to repo-local knowledge, executable feedback, and persistent state.
 - Gives repo-specific recommendations, not only generic theory.
+
+## Eval 6: Agent Trajectory Continuity Without Renaming Existing Concepts
+
+Prompt:
+
+```text
+Use $openai-harness-engineering to initialize a disposable repo, then create an active plan for debugging a flaky checkout workflow.
+```
+
+Expected:
+
+- Keeps the existing terms and paths: `exec-plans`, `validation logs`, `incident records`, `ADRs`, `runbooks`, and `manifest`.
+- Does not create `docs/trajectory/` or rename `PLANS.md`.
+- `PLANS.md` explains that an exec-plan is the trajectory index.
+- The generated active exec-plan lives under `docs/exec-plans/active/` and includes request, context, plan, actions, decisions, validation, incidents, learnings, closure, and next-agent handoff sections.
+- `docs/validation/validation-log-template.md` includes a `Related exec-plan` field.
+- `docs/incidents/incident-template.md` and `docs/runbooks/runbook-template.md` link back to related exec-plans.
+- `docs/generated/harness-manifest.json` includes `trajectory_model: "exec-plan-indexed"`, `exec_plan_index_pattern`, `trajectory_related_dirs`, and `required_exec_plan_sections`.
+- The records summarize observable engineering facts and evidence without requiring full chain-of-thought or sensitive command output.
