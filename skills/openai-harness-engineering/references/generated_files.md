@@ -9,11 +9,22 @@ Use this reference when deciding what the initializer creates or updates.
 - `DESIGN.md`: Coding taste, simplicity rules, design constraints, and agent behavior.
 - `FRONTEND.md`: Frontend-specific standards, accessibility, browser testing, and UI verification.
 - `BACKEND.md`: Backend-specific standards, API contracts, validation, persistence, and jobs.
-- `PLANS.md`: Planning workflow for active work, completed plans, and session continuity.
+- `PLANS.md`: Planning workflow for active work, completed plans, and session continuity. It defines the exec-plan as the trajectory index.
 - `PRODUCT_SENSE.md`: Product goals, user journeys, domains, non-goals, and decision log links.
 - `QUALITY_SCORE.md`: Quality rubric, test expectations, coverage standards, and review checks.
 - `RELIABILITY.md`: Local environments, observability, debugging, health checks, and incident records.
 - `SECURITY.md`: Baseline security requirements, secrets handling, auth, data protection, and dependencies.
+
+## Trajectory Roles
+
+The generated harness keeps existing names and directories. Agent trajectory is the organizing principle that connects them:
+
+- `exec-plans`: trajectory index for a task.
+- `validation logs`: evidence layer for command results, smoke checks, screenshots, traces, and residual risk.
+- `incident records`: failure branch for user, data, availability, or trust impact.
+- `ADRs`: durable decision layer for architectural and operating-model decisions.
+- `runbooks`: learned operation layer for repeatable setup, debugging, recovery, and maintenance.
+- `generated manifests`: harness self-description layer, including trajectory metadata and required exec-plan sections.
 
 ## Docs Tree
 
@@ -31,6 +42,13 @@ docs/
 ├── runbooks/
 └── validation/
 ```
+
+Generated templates include:
+
+- `docs/validation/validation-log-template.md`
+- `docs/incidents/incident-template.md`
+- `docs/runbooks/runbook-template.md`
+- `docs/generated/harness-manifest.json`
 
 ## Optional Agent Adapter Files
 

@@ -14,6 +14,7 @@ Core model: **Agent = Model + Harness**. Humans steer; agents execute. The repos
 
 - Initializes a concise agent constitution and docs tree.
 - Creates persistent execution-plan, validation, incident, runbook, and ADR locations.
+- Uses `exec-plans` as the trajectory index for recoverable agent work without renaming existing harness concepts.
 - Guides long-running work so state survives context compaction, restarts, and handoffs.
 - Emphasizes mechanical enforcement: tests, linters, structural checks, CI, and remediation-oriented errors.
 - Audits existing harness docs for gaps and drift.
@@ -80,7 +81,7 @@ The script creates:
 
 - Root docs: `AGENTS.md`, `ARCHITECTURE.md`, `DESIGN.md`, `FRONTEND.md`, `BACKEND.md`, `PLANS.md`, `PRODUCT_SENSE.md`, `QUALITY_SCORE.md`, `RELIABILITY.md`, `SECURITY.md`.
 - Docs tree: `docs/adr/`, `docs/design-docs/`, `docs/exec-plans/active/`, `docs/exec-plans/completed/`, `docs/generated/`, `docs/incidents/`, `docs/product-specs/`, `docs/references/`, `docs/runbooks/`, `docs/validation/`.
-- Seed files for core beliefs, local development, debugging, validation logs, and the initial ADR.
+- Seed files for core beliefs, local development, debugging, validation logs, incident/runbook templates, and the initial ADR.
 
 Run a quick harness audit after initialization:
 
@@ -106,11 +107,16 @@ For non-trivial project work, create or update `docs/exec-plans/active/<task>.md
 
 - User request and interpreted goal.
 - Non-goals.
-- Relevant context.
+- Relevant context and context actually read.
 - Plan and status.
-- Decisions.
-- Validation commands and results.
+- Actions taken.
+- Decisions and links to ADRs, specs, or design docs.
+- Validation commands, results, and validation-log links.
+- Incident links when failures affect users, data, availability, or trust.
+- Learnings, closure notes, and next-agent handoff state.
 - Open questions and follow-ups.
+
+Treat the exec-plan as the trajectory index for the task: `Request -> Context -> Plan -> Actions -> Decisions -> Validation -> Incidents -> Learnings -> Closure`. It is not a transcript. Record externally visible engineering facts, concise rationale, commands, results, artifacts, links, and handoff state. Do not record full chain-of-thought, secrets, sensitive payloads, or raw command output that contains private data.
 
 You can create a plan with:
 
@@ -155,5 +161,7 @@ For audits, lead with concrete gaps and recommended fixes. Include file paths. I
 - Do not overwrite existing harness docs without explicit approval.
 - Do not put detailed business rules in `AGENTS.md`.
 - Prefer executable enforcement over prose-only policy.
+- Record externally visible engineering facts, not full chain-of-thought.
+- Do not copy secrets, sensitive payloads, or private command output into plans, validation logs, incidents, or runbooks.
 - Keep changes surgical and repo-specific.
 - The generated harness content should be in English unless the user explicitly requests another language for project docs.

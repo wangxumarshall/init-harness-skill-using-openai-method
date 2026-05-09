@@ -17,6 +17,25 @@ The skill turns a new or existing repository into a system of record for agents:
 
 The goal is not just scaffolding. The goal is a project that a new agent can enter, understand, run, debug, validate, and continue after context compaction or a new session.
 
+## Agent Trajectory
+
+This skill treats agent trajectory as an organizing principle: a recoverable, auditable, reviewable path through real engineering work.
+
+It does not rename the existing harness terms or add a separate transcript system. The durable path is:
+
+```text
+Request -> Context -> Plan -> Actions -> Decisions -> Validation -> Incidents -> Learnings -> Closure
+```
+
+- `exec-plans` are the trajectory index for non-trivial work.
+- `validation logs` are the evidence layer.
+- `incident records` are the failure branch.
+- `ADRs` are the durable decision layer.
+- `runbooks` are the learned operation layer.
+- `generated manifests` are the harness self-description layer.
+
+The boundary matters: record observable engineering facts, concise rationale, commands, results, links, and handoff state. Do not record full chain-of-thought, paste sensitive command output, invent precision, or create documentation debt by logging trivial work in excessive detail.
+
 ## References
 
 - [Harness engineering: leveraging Codex in an agent-first world](https://openai.com/index/harness-engineering/)

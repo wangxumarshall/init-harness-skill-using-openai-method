@@ -9,6 +9,20 @@ Use this reference when the user asks what OpenAI Harness Engineering means, ask
 - The repo should become the system of record. Architectural decisions, product decisions, runbooks, and local workflow knowledge should be committed where agents can read them.
 - Useful harnesses are legible to agents: small entry points, explicit maps, deterministic commands, reproducible environments, and errors that explain how to remediate themselves.
 - Long-running agent work needs continuity: plans, task logs, validation results, decisions, and follow-up work must be written back into the repo so future sessions can resume.
+- Agent trajectory is the recoverable engineering path through a task: request, context, plan, actions, decisions, validation, incidents, learnings, and closure.
+
+## Agent Trajectory Boundary
+
+This skill adopts trajectory-as-organizing-principle. It does not introduce a new `docs/trajectory/` tree and does not rename existing harness terms.
+
+- `exec-plans` index the trajectory for non-trivial work.
+- `validation logs` hold evidence.
+- `incident records` hold failure branches.
+- `ADRs` hold durable decisions.
+- `runbooks` hold learned repeatable operations.
+- `generated manifests` describe the harness and its required trajectory-aware sections.
+
+Trajectory records should be recoverable and auditable, not exhaustive. Record externally visible engineering facts, commands, results, artifacts, links, state, and concise rationale. Do not write full chain-of-thought. Avoid sensitive data leakage, raw secret-bearing logs, pseudo-precise timelines, and documentation debt from over-recording trivial tasks.
 
 ## Capability Targets
 

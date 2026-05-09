@@ -13,6 +13,32 @@ For non-trivial work, agents should use this loop:
 5. **Record**: Write validation results, decisions, unresolved risks, and next steps into the active plan.
 6. **Close**: Move completed plans to `docs/exec-plans/completed/` with outcome, shipped changes, and follow-up tasks.
 
+## Trajectory Semantics
+
+For a non-trivial task, the active exec-plan is the trajectory index. It should connect:
+
+```text
+Request -> Context -> Plan -> Actions -> Decisions -> Validation -> Incidents -> Learnings -> Closure
+```
+
+This does not create a new logging system and does not rename existing harness concepts. It gives each existing file type a clear job:
+
+- `exec-plans`: index the task trajectory and current handoff state.
+- `validation logs`: preserve evidence when command results, screenshots, traces, or smoke notes need to survive the session.
+- `incident records`: branch out when a failure affects users, data, availability, or trust.
+- `ADRs`: preserve durable architecture or product decisions that outlive one task.
+- `runbooks`: capture repeatable setup, debugging, operations, or recovery knowledge learned during the task.
+- `generated manifests`: describe the harness structure and required exec-plan sections.
+
+Keep the exec-plan factual. Record files read, actions taken, command results, artifacts, links, decisions, blockers, and concise rationale. Do not record full chain-of-thought, secrets, sensitive payloads, or raw logs that contain private data.
+
+Split content out of the exec-plan when:
+
+- A validation result has enough evidence or artifacts to merit a stable `docs/validation/` record.
+- A failure has user, data, availability, or trust impact and needs a `docs/incidents/` record.
+- A decision changes architecture, durable product behavior, dependency policy, or operating model and needs an ADR or design doc.
+- A debugging or operations procedure is likely to repeat and should become a `docs/runbooks/` entry.
+
 ## Persistent State
 
 Generated plans should include:
@@ -22,11 +48,12 @@ Generated plans should include:
 - User request and interpreted goal.
 - Non-goals.
 - Current status.
-- Files and modules touched.
-- Decisions made.
-- Validation commands and results.
-- Open questions and blockers.
-- Follow-up work.
+- Context read and why it matters.
+- Planned steps and actions taken.
+- Decisions made and decision links.
+- Validation commands, results, and evidence links.
+- Incident links when applicable.
+- Learnings, closure notes, open questions, blockers, follow-up work, and next-agent handoff.
 
 This is what lets a new agent resume after context compaction or a new session.
 
