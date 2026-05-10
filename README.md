@@ -1,55 +1,50 @@
 # OpenAI Harness Engineering Skill
 
-An agent-first skill for initializing, auditing, and operating durable software project harnesses. It is based on OpenAI's Harness Engineering idea: **Agent = Model + Harness**. The model matters, but the repository environment, instructions, tools, tests, runbooks, and feedback loops determine whether agents can keep solving problems over time.
+An agent-first skill for initializing, auditing, and operating thin, durable software project harnesses.
+
+It is grounded in OpenAI's harness idea: **Agent = Model + Harness**. As models improve, the harness should get thinner in prose and stronger in mechanics. The durable value is not a giant prompt dump. It is a repo that a new agent can enter, validate, repair, and continue.
 
 This skill is designed for Codex, Cursor, Claude Code, Trae, Gemini, OpenCode, and similar coding agents.
 
 ## What It Builds
 
-The skill turns a new or existing repository into a system of record for agents:
+The skill turns a repository into a system of record for agents:
 
-- A short `AGENTS.md` map that routes agents to focused docs.
-- Architecture, design, frontend, backend, quality, reliability, security, and product-sense docs.
+- A short `AGENTS.md` map that routes agents to the smallest relevant docs.
 - Persistent execution plans under `docs/exec-plans/active/` and `docs/exec-plans/completed/`.
-- Runbooks, validation logs, incident records, ADRs, and generated manifests.
-- A deterministic initializer script that preserves existing files unless overwrite is explicitly requested.
-- Helper scripts for harness audits and persistent execution-plan creation.
+- Runbooks, validation logs, and machine-readable harness metadata.
+- Deterministic scripts for initialization, harness auditing, plan creation, and drift checks.
+- An eval loop for regression-testing the skill itself.
 
-The goal is not just scaffolding. The goal is a project that a new agent can enter, understand, run, debug, validate, and continue after context compaction or a new session.
+The goal is a project that survives context compaction, handoffs, and repeated changes without depending on one chat session.
 
-## Agent Trajectory
+## Thin Harness Model
 
-This skill treats agent trajectory as an organizing principle: a recoverable, auditable, reviewable path through real engineering work.
+The stable split is:
 
-It does not rename the existing harness terms or add a separate transcript system. The durable path is:
+- **Model**: interpretation, comparison, judgment, reporting.
+- **Scripts**: repeated deterministic mechanics.
+- **Repo docs**: durable state, discoverable constraints, and handoff context.
 
-```text
-Request -> Context -> Plan -> Actions -> Decisions -> Validation -> Incidents -> Learnings -> Closure
-```
+Useful harnesses stay thin:
 
-- `exec-plans` are the trajectory index for non-trivial work.
-- `validation logs` are the evidence layer.
-- `incident records` are the failure branch.
-- `ADRs` are the durable decision layer.
-- `runbooks` are the learned operation layer.
-- `generated manifests` are the harness self-description layer.
+- `AGENTS.md` is a short map, not a manual.
+- Detailed guidance lives in focused docs and is loaded only when needed.
+- Repeated mechanics migrate into scripts and CI.
+- Drift checks and recurring cleanup keep the harness from accreting decorative prose.
 
-The boundary matters: record observable engineering facts, concise rationale, commands, results, links, and handoff state. Do not record full chain-of-thought, paste sensitive command output, invent precision, or create documentation debt by logging trivial work in excessive detail.
+### What Gets Thinner Over Time
 
-## References
-
-- [Harness engineering: leveraging Codex in an agent-first world](https://openai.com/index/harness-engineering/)
-- [Run long horizon tasks with Codex](https://developers.openai.com/blog/run-long-horizon-tasks-with-codex)
-- [Skills, shell tips, and compaction: lessons from real-world Codex use](https://developers.openai.com/blog/skills-shell-tips)
-- [Testing agent skills systematically with evals](https://developers.openai.com/blog/eval-skills)
-- [Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?](https://arxiv.org/html/2602.11988v1)
-- [On the Impact of AGENTS.md Files on the Efficiency of AI Coding Agents](https://arxiv.org/html/2601.20404v2)
+- Thick prompt manuals shrink.
+- Duplicated prose shrinks.
+- One-shot scaffolding shrinks.
+- Executable checks, traces, plans, and recurring cleanup remain.
 
 ## Core Capabilities
 
 ### Initialize
 
-Generate an OpenAI-style harness constitution for a target repo:
+Generate an adaptive harness for a target repo:
 
 ```bash
 python3 skills/openai-harness-engineering/scripts/init_harness.py \
@@ -58,33 +53,66 @@ python3 skills/openai-harness-engineering/scripts/init_harness.py \
   --project-description "A workflow app for internal operations" \
   --tech-stack "Next.js, TypeScript, Postgres" \
   --domains "Users, Workflows, Notifications" \
-  --primary-agent "Codex"
+  --primary-agent "Codex" \
+  --profile standard
 ```
 
-Use `--dry-run` to inspect planned changes. Use `--force` only when you intend to overwrite existing generated files.
+Profiles:
+
+- `minimal`: just the thin core map, plans, quality, reliability, and supporting directories.
+- `standard`: core docs plus adaptive frontend/backend surfaces when the repo clearly signals them.
+- `full`: emit the whole scaffold surface.
+
+Useful flags:
+
+- `--include-frontend`
+- `--include-backend`
+- `--include-ops`
+- `--emit-adapters auto|none|all`
+- `--dry-run`
+- `--force`
+
+The initializer preserves existing files by default. If a managed document already exists and contains the harness marker, missing managed sections can be appended without overwriting user-authored content.
 
 ### Audit
 
-Ask an agent to use `$openai-harness-engineering` to review an existing repo for harness quality. It will check whether a new agent can find architecture, product context, commands, active work, validation expectations, debugging paths, and persistent state.
-
-You can also run the audit script directly:
+Audit a repo for harness quality:
 
 ```bash
-python3 skills/openai-harness-engineering/scripts/audit_harness.py --target /path/to/project
+python3 skills/openai-harness-engineering/scripts/audit_harness.py \
+  --target /path/to/project \
+  --mode full
 ```
+
+Audit layers:
+
+- `structure`: required files, directories, links, manifest/profile consistency
+- `workflow`: unresolved placeholders, command executability, plan shape, recurring cleanup reachability
+- `full`: both
+
+Machine-readable output:
+
+```bash
+python3 skills/openai-harness-engineering/scripts/audit_harness.py \
+  --target /path/to/project \
+  --mode full \
+  --json
+```
+
+Exit codes:
+
+- `0`: pass
+- `1`: structure failures
+- `2`: workflow failures
+- `3`: both
 
 ### Operate
 
-For non-trivial work, the skill routes agents through a durable loop:
+For non-trivial work, use exec-plans as the trajectory index:
 
-1. Read the repo map and active plans.
-2. Create or update an execution plan.
-3. Make surgical changes.
-4. Run validation.
-5. Record decisions, results, blockers, and follow-ups.
-6. Move completed work into `docs/exec-plans/completed/`.
-
-This is the part that helps projects keep running instead of relying on one chat session.
+```text
+Request -> Context -> Plan -> Actions -> Decisions -> Validation -> Incidents -> Learnings -> Closure
+```
 
 Create an active plan directly:
 
@@ -97,51 +125,49 @@ python3 skills/openai-harness-engineering/scripts/new_plan.py \
   --agent "Codex"
 ```
 
+### Drift Control
+
+Run a read-only drift scan:
+
+```bash
+python3 skills/openai-harness-engineering/scripts/check_harness_drift.py --target /path/to/project
+```
+
+It reports:
+
+- broken local links
+- stale unresolved placeholders
+- stale active plans
+- manifest/docs mismatches
+
 ### Evaluate
 
-The skill includes guidance for testing itself on disposable projects, checking idempotency, preserving user-authored docs, and verifying that generated harnesses support long-running work.
-
-## Installation
-
-### Codex CLI
+Run the skill's deterministic eval harness:
 
 ```bash
-codex plugin marketplace add wangxumarshall/openai-harness-engineering
-codex plugin install openai-harness-engineering
+python3 evals/run_evals.py
+python3 evals/grade_evals.py
 ```
 
-Invoke with:
+When `codex` is available, `evals/run_evals.py --engine codex` also stores JSONL traces from `codex exec --json`.
 
-```text
-$openai-harness-engineering initialize this repo
-```
+## Harness Maintenance Loop
 
-### Claude Code
+Thin harnesses stay valuable by shedding stale structure:
 
-```bash
-/plugin marketplace add wangxumarshall/openai-harness-engineering
-/plugin install openai-harness-engineering@harness-engineering-skills
-```
+1. Run a doc drift scan.
+2. Clear unresolved placeholders before calling the harness ready.
+3. Review stale active plans and either update or close them.
+4. Move repeated manual review comments into scripts, tests, or CI.
 
-### Cursor
+## References
 
-```bash
-mkdir -p .cursor/rules
-curl -o .cursor/rules/openai-harness-engineering.mdc \
-  https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/.cursor/rules/openai-harness-engineering.mdc
-```
-
-### Trae
-
-```bash
-mkdir -p .trae/rules
-curl -o .trae/rules/openai-harness-engineering.md \
-  https://raw.githubusercontent.com/wangxumarshall/openai-harness-engineering/main/.trae/rules/openai-harness-engineering.md
-```
-
-### Manual Skill Install
-
-Copy `skills/openai-harness-engineering/` into your agent's skills directory, preserving `SKILL.md`, `scripts/`, `references/`, and `agents/`.
+- [Harness engineering: leveraging Codex in an agent-first world](https://openai.com/index/harness-engineering/)
+- [Run long horizon tasks with Codex](https://developers.openai.com/blog/run-long-horizon-tasks-with-codex)
+- [Skills, shell tips, and compaction: lessons from real-world Codex use](https://developers.openai.com/blog/skills-agents-sdk)
+- [Testing agent skills systematically with evals](https://developers.openai.com/blog/eval-skills)
+- [Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?](https://arxiv.org/abs/2602.11988)
+- [On the Impact of AGENTS.md Files on the Efficiency of AI Coding Agents](https://arxiv.org/abs/2601.20404)
 
 ## Project Structure
 
@@ -156,17 +182,15 @@ skills/openai-harness-engineering/
 │   └── operations.md
 └── scripts/
     ├── audit_harness.py
+    ├── check_harness_drift.py
     ├── init_harness.py
     └── new_plan.py
+evals/
+├── prompts.csv
+├── run_evals.py
+├── grade_evals.py
+└── artifacts/
 ```
-
-## Design Notes
-
-- `SKILL.md` stays concise and procedural.
-- Detailed concepts live in `references/` and are loaded only when needed.
-- Repeated deterministic work lives in `scripts/`.
-- Generated `AGENTS.md` is deliberately short to avoid becoming a stale prompt dump.
-- Mechanical enforcement is preferred over prose-only policy.
 
 ## License
 

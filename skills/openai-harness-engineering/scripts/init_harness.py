@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Initialize or refresh an OpenAI-style agent harness in a repository."""
+"""Initialize or refresh a thinner OpenAI-style agent harness in a repository."""
 
 from __future__ import annotations
 
@@ -11,30 +11,68 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ROOT_FILES = [
-    "AGENTS.md",
-    "ARCHITECTURE.md",
-    "DESIGN.md",
-    "FRONTEND.md",
-    "BACKEND.md",
-    "PLANS.md",
-    "PRODUCT_SENSE.md",
-    "QUALITY_SCORE.md",
-    "RELIABILITY.md",
-    "SECURITY.md",
+MANAGED_HEADER = "<!-- openai-harness-engineering:managed-document -->"
+SECTION_BEGIN = "<!-- openai-harness-engineering:section:"
+SECTION_END = "<!-- /openai-harness-engineering:section:"
+FRONTEND_MARKERS = [
+    "next.config.js",
+    "next.config.mjs",
+    "next.config.ts",
+    "vite.config.js",
+    "vite.config.ts",
+    "src/app",
+    "src/pages",
+    "app",
+    "pages",
 ]
-
-DOC_DIRS = [
-    "docs/adr",
-    "docs/design-docs",
+BACKEND_MARKERS = [
+    "server",
+    "api",
+    "manage.py",
+    "go.mod",
+    "Cargo.toml",
+    "pom.xml",
+]
+FRONTEND_PACKAGES = {"react", "next", "vue", "svelte", "@angular/core"}
+BACKEND_PACKAGES = {"express", "fastify", "koa", "fastapi", "django", "flask"}
+PROFILE_ROOT_FILES = {
+    "minimal": ["AGENTS.md", "PLANS.md", "QUALITY_SCORE.md", "RELIABILITY.md"],
+    "standard": [
+        "AGENTS.md",
+        "ARCHITECTURE.md",
+        "DESIGN.md",
+        "PLANS.md",
+        "PRODUCT_SENSE.md",
+        "QUALITY_SCORE.md",
+        "RELIABILITY.md",
+        "SECURITY.md",
+    ],
+    "full": [
+        "AGENTS.md",
+        "ARCHITECTURE.md",
+        "DESIGN.md",
+        "FRONTEND.md",
+        "BACKEND.md",
+        "PLANS.md",
+        "PRODUCT_SENSE.md",
+        "QUALITY_SCORE.md",
+        "RELIABILITY.md",
+        "SECURITY.md",
+    ],
+}
+BASE_DIRS = [
     "docs/exec-plans/active",
     "docs/exec-plans/completed",
     "docs/generated",
+    "docs/runbooks",
+    "docs/validation",
+]
+OPS_DIRS = [
+    "docs/adr",
+    "docs/design-docs",
     "docs/incidents",
     "docs/product-specs",
     "docs/references",
-    "docs/runbooks",
-    "docs/validation",
 ]
 
 
@@ -46,6 +84,12 @@ class HarnessContext:
     domains: str
     primary_agent: str
     generated_on: str
+    profile: str
+    include_frontend: bool
+    include_backend: bool
+    include_ops: bool
+    emit_adapters: str
+    required_commands: list[dict[str, str]]
 
     @property
     def domain_list(self) -> list[str]:
@@ -55,17 +99,23 @@ class HarnessContext:
 
     @property
     def domain_bullets(self) -> str:
-        return "\n".join(f"- {domain}" for domain in self.domain_list)
+        return "\n".join(f"- {part}" for part in self.domain_list)
 
     @property
-    def slug(self) -> str:
-        value = re.sub(r"[^a-zA-Z0-9]+", "-", self.project_name.lower()).strip("-")
-        return value or "project"
+    def enabled_surfaces(self) -> list[str]:
+        surfaces = ["core"]
+        if self.include_frontend:
+            surfaces.append("frontend")
+        if self.include_backend:
+            surfaces.append("backend")
+        if self.include_ops:
+            surfaces.append("ops")
+        return surfaces
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create an agent-first harness constitution and operating docs."
+        description="Create a thin, adaptive harness constitution and operating docs."
     )
     parser.add_argument("--target", default=".", help="Repository root to initialize.")
     parser.add_argument("--project-name", default="{{PROJECT_NAME}}")
@@ -74,9 +124,36 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--domains", default="{{CORE_DOMAINS}}")
     parser.add_argument("--primary-agent", default="{{CODING_AGENT}}")
     parser.add_argument(
+        "--profile",
+        choices=["minimal", "standard", "full"],
+        default="standard",
+        help="How much harness surface to create.",
+    )
+    parser.add_argument(
+        "--include-frontend",
+        action="store_true",
+        help="Force frontend-oriented docs even if detection is ambiguous.",
+    )
+    parser.add_argument(
+        "--include-backend",
+        action="store_true",
+        help="Force backend-oriented docs even if detection is ambiguous.",
+    )
+    parser.add_argument(
+        "--include-ops",
+        action="store_true",
+        help="Force ops-oriented docs such as ADRs and incident templates.",
+    )
+    parser.add_argument(
+        "--emit-adapters",
+        choices=["auto", "none", "all"],
+        default="auto",
+        help="Emit editor/agent adapter files into the target repo.",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite existing generated files. Use only with explicit user approval.",
+        help="Overwrite existing generated files. Use only with explicit approval.",
     )
     parser.add_argument(
         "--dry-run",
@@ -86,831 +163,645 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def h1(title: str) -> str:
-    return f"# {title}\n\n"
+def make_doc(title: str, sections: list[tuple[str, str]]) -> str:
+    body = [MANAGED_HEADER, f"# {title}", ""]
+    for name, content in sections:
+        body.append(f"{SECTION_BEGIN}{name} -->")
+        body.append(f"## {name}")
+        body.append("")
+        body.append(content.rstrip())
+        body.append(f"{SECTION_END}{name} -->")
+        body.append("")
+    return "\n".join(body).rstrip() + "\n"
 
 
-def templates(ctx: HarnessContext) -> dict[str, str]:
-    return {
-        "AGENTS.md": agents_md(ctx),
-        "ARCHITECTURE.md": architecture_md(ctx),
-        "DESIGN.md": design_md(ctx),
-        "FRONTEND.md": frontend_md(ctx),
-        "BACKEND.md": backend_md(ctx),
-        "PLANS.md": plans_md(ctx),
-        "PRODUCT_SENSE.md": product_sense_md(ctx),
-        "QUALITY_SCORE.md": quality_score_md(ctx),
-        "RELIABILITY.md": reliability_md(ctx),
-        "SECURITY.md": security_md(ctx),
-        "docs/design-docs/core-beliefs.md": core_beliefs_md(ctx),
-        "docs/runbooks/local-development.md": local_development_md(ctx),
-        "docs/runbooks/debugging.md": debugging_md(ctx),
-        "docs/runbooks/runbook-template.md": runbook_template_md(ctx),
-        "docs/validation/validation-log-template.md": validation_log_template_md(ctx),
-        "docs/incidents/incident-template.md": incident_template_md(ctx),
-        "docs/adr/0001-agent-harness-constitution.md": adr_md(ctx),
-    }
+def detect_surfaces(root: Path) -> tuple[bool, bool]:
+    frontend = any((root / marker).exists() for marker in FRONTEND_MARKERS)
+    backend = any((root / marker).exists() for marker in BACKEND_MARKERS)
+
+    package_json = root / "package.json"
+    if package_json.exists():
+        try:
+            data = json.loads(package_json.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            data = {}
+        deps: set[str] = set()
+        for key in ("dependencies", "devDependencies", "peerDependencies"):
+            deps.update((data.get(key) or {}).keys())
+        if deps & FRONTEND_PACKAGES:
+            frontend = True
+        if deps & BACKEND_PACKAGES:
+            backend = True
+
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        text = pyproject.read_text(encoding="utf-8", errors="ignore").lower()
+        if any(name in text for name in ("fastapi", "django", "flask")):
+            backend = True
+
+    return frontend, backend
 
 
-def agents_md(ctx: HarnessContext) -> str:
-    return (
-        h1(f"{ctx.project_name} Agent Map")
-        + f"""This repository is designed for agent-first development. This file is a map, not a policy dump.
+def select_surfaces(args: argparse.Namespace, root: Path) -> tuple[bool, bool, bool]:
+    detected_frontend, detected_backend = detect_surfaces(root)
+    include_frontend = args.profile == "full" or args.include_frontend or (
+        args.profile == "standard" and detected_frontend
+    )
+    include_backend = args.profile == "full" or args.include_backend or (
+        args.profile == "standard" and detected_backend
+    )
+    include_ops = (
+        args.profile == "full"
+        or args.include_ops
+        or args.profile == "standard"
+    )
+    return include_frontend, include_backend, include_ops
 
-## Start Here
 
-1. Read the current user request.
-2. Read the smallest relevant docs below.
-3. Check `docs/exec-plans/active/` for in-progress work before editing.
-4. Update plans, validation notes, and decisions as work progresses.
+def default_required_commands() -> list[dict[str, str]]:
+    return [
+        {"name": "install", "command": "{{INSTALL_COMMAND}}", "doc": "RELIABILITY.md"},
+        {"name": "validation", "command": "{{FULL_VALIDATION_COMMAND}}", "doc": "RELIABILITY.md"},
+    ]
 
-## System of Record
 
-- [Architecture & Boundaries](./ARCHITECTURE.md)
-- [Design Principles](./DESIGN.md)
-- [Product Sense](./PRODUCT_SENSE.md)
-- [Quality Score](./QUALITY_SCORE.md)
-- [Reliability & Operations](./RELIABILITY.md)
-- [Security Baseline](./SECURITY.md)
-- [Planning Workflow](./PLANS.md)
-
-## Core Directories
-
-- `docs/design-docs/`: durable design context and beliefs.
-- `docs/product-specs/`: requirements, specs, and accepted product behavior.
-- `docs/exec-plans/active/`: active agent plans and resumable task state.
-- `docs/exec-plans/completed/`: finished plans with outcomes and validation.
-- `docs/runbooks/`: operational recipes agents can execute.
-- `docs/validation/`: validation logs, smoke notes, and test evidence.
-- `docs/incidents/`: user-impacting failure records and follow-up actions.
-- `docs/adr/`: architecture decision records.
-
-## Project Facts
-
-- Project: {ctx.project_name}
-- Description: {ctx.project_description}
-- Tech stack: {ctx.tech_stack}
-- Primary agent: {ctx.primary_agent}
-- Core domains:
-{ctx.domain_bullets}
-"""
+def build_context(args: argparse.Namespace, root: Path) -> HarnessContext:
+    include_frontend, include_backend, include_ops = select_surfaces(args, root)
+    return HarnessContext(
+        project_name=args.project_name,
+        project_description=args.project_description,
+        tech_stack=args.tech_stack,
+        domains=args.domains,
+        primary_agent=args.primary_agent,
+        generated_on=dt.date.today().isoformat(),
+        profile=args.profile,
+        include_frontend=include_frontend,
+        include_backend=include_backend,
+        include_ops=include_ops,
+        emit_adapters=args.emit_adapters,
+        required_commands=default_required_commands(),
     )
 
 
+def templates(ctx: HarnessContext) -> dict[str, str]:
+    files: dict[str, str] = {}
+    for rel in PROFILE_ROOT_FILES[ctx.profile]:
+        files[rel] = ROOT_TEMPLATE_BUILDERS[rel](ctx)
+
+    if ctx.include_frontend:
+        files["FRONTEND.md"] = frontend_md(ctx)
+    if ctx.include_backend:
+        files["BACKEND.md"] = backend_md(ctx)
+    if ctx.include_ops:
+        files["docs/runbooks/local-development.md"] = local_development_md(ctx)
+        files["docs/runbooks/debugging.md"] = debugging_md(ctx)
+        files["docs/runbooks/runbook-template.md"] = runbook_template_md(ctx)
+        files["docs/validation/validation-log-template.md"] = validation_log_template_md(ctx)
+        files["docs/incidents/incident-template.md"] = incident_template_md(ctx)
+        files["docs/design-docs/core-beliefs.md"] = core_beliefs_md(ctx)
+        files["docs/adr/0001-agent-harness-constitution.md"] = adr_md(ctx)
+
+    files.update(adapter_templates(ctx))
+    return files
+
+
+def agents_md(ctx: HarnessContext) -> str:
+    sections = [
+        (
+            "Start Here",
+            "\n".join(
+                [
+                    "1. Read the user request.",
+                    "2. Read the smallest relevant linked doc.",
+                    "3. Check `docs/exec-plans/active/` before editing.",
+                    "4. Leave behind updated plans, validation notes, and follow-ups.",
+                ]
+            ),
+        ),
+        (
+            "Operating Split",
+            "\n".join(
+                [
+                    f"- `{ctx.primary_agent}` handles interpretation, tradeoffs, and reporting.",
+                    "- Scripts handle repeated deterministic mechanics.",
+                    "- Repo docs hold durable state, constraints, and handoff context.",
+                ]
+            ),
+        ),
+        (
+            "System of Record",
+            "\n".join(
+                [
+                    "- [Planning Workflow](./PLANS.md)",
+                    "- [Quality Gates](./QUALITY_SCORE.md)",
+                    "- [Reliability & Maintenance](./RELIABILITY.md)",
+                ]
+                + ([ "- [Architecture & Boundaries](./ARCHITECTURE.md)" ] if ctx.profile != "minimal" else [])
+                + ([ "- [Design Principles](./DESIGN.md)" ] if ctx.profile != "minimal" else [])
+                + ([ "- [Product Sense](./PRODUCT_SENSE.md)" ] if ctx.profile != "minimal" else [])
+                + ([ "- [Security Baseline](./SECURITY.md)" ] if ctx.profile != "minimal" else [])
+                + ([ "- [Frontend Standards](./FRONTEND.md)" ] if ctx.include_frontend else [])
+                + ([ "- [Backend Standards](./BACKEND.md)" ] if ctx.include_backend else [])
+            ),
+        ),
+        (
+            "Core Directories",
+            "\n".join(
+                [
+                    "- `docs/exec-plans/active/`: current task trajectory indexes.",
+                    "- `docs/exec-plans/completed/`: closed plans with outcome and evidence.",
+                    "- `docs/validation/`: validation logs and smoke notes.",
+                    "- `docs/runbooks/`: repeated setup, debugging, and maintenance procedures.",
+                    "- `docs/generated/`: manifest and machine-readable harness metadata.",
+                ]
+                + ([ "- `docs/incidents/`: user-impacting failures and prevention follow-ups." ] if ctx.include_ops else [])
+                + ([ "- `docs/adr/`: durable architecture and operating-model decisions." ] if ctx.include_ops else [])
+            ),
+        ),
+        (
+            "Project Facts",
+            "\n".join(
+                [
+                    f"- Project: {ctx.project_name}",
+                    f"- Description: {ctx.project_description}",
+                    f"- Tech stack: {ctx.tech_stack}",
+                    f"- Profile: {ctx.profile}",
+                    f"- Primary agent: {ctx.primary_agent}",
+                    "- Core domains:",
+                    ctx.domain_bullets,
+                ]
+            ),
+        ),
+    ]
+    return make_doc(f"{ctx.project_name} Agent Map", sections)
+
+
 def architecture_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Architecture and Boundary Constraints")
-        + f"""## Goal
-
-Make `{ctx.project_name}` legible enough that a new agent can safely change it without private human context.
-
-## Strict Layered Domain Architecture
-
-Every business domain should follow a unidirectional dependency flow:
-
-```text
-Types -> Config -> Repo -> Service -> Runtime -> UI
-```
-
-- `Types`: shared schemas, type definitions, and validated shapes.
-- `Config`: feature flags, environment configuration, and dependency wiring.
-- `Repo`: persistence and external API access.
-- `Service`: business rules and use cases.
-- `Runtime`: jobs, handlers, routes, commands, workers, and orchestration.
-- `UI`: presentation and interaction logic.
-
-Cross-cutting concerns such as auth, telemetry, feature flags, and payments must enter through explicit provider interfaces. Hidden globals and ad hoc imports are boundary violations.
-
-## Domain Map
-
-Core domains:
-
-{ctx.domain_bullets}
-
-For each domain, document:
-
-- Public types and validation schemas.
-- Allowed dependencies.
-- Storage ownership.
-- External systems.
-- Runtime entry points.
-- UI surfaces, if any.
-
-## Boundary Rules
-
-- Parse and validate data at system boundaries.
-- Keep business rules out of UI, route handlers, database adapters, and test fixtures.
-- Prefer shared utilities over repeated one-off helpers.
-- Add a boundary test or lint rule when a violation repeats.
-- Do not refactor unrelated layers while solving a local task.
-
-## Mechanical Enforcement
-
-Architectural rules should become executable checks. Preferred enforcement order:
-
-1. Existing compiler or type checker.
-2. Existing linter and formatter.
-3. Unit or integration tests.
-4. Structural tests for forbidden imports, dependency direction, file placement, or naming.
-5. CI workflows that run the checks in a clean environment.
-
-Custom checks must print remediation instructions. A useful failure tells `{ctx.primary_agent}`:
-
-- What rule failed.
-- Which file or dependency caused it.
-- The intended architecture.
-- The safest next edit.
-
-## Decision Records
-
-Record durable architectural decisions in `docs/adr/`. Include context, decision, consequences, and validation expectations.
-"""
+    return make_doc(
+        "Architecture and Boundary Constraints",
+        [
+            (
+                "Goal",
+                f"Make `{ctx.project_name}` legible enough that a new agent can change it safely without hidden human context.",
+            ),
+            (
+                "Boundary Rules",
+                "\n".join(
+                    [
+                        "- Preserve clear dependency direction across types, config, services, runtime, and interfaces.",
+                        "- Keep business rules out of UI glue, route handlers, and persistence adapters.",
+                        "- Turn repeated boundary mistakes into structural checks or tests.",
+                    ]
+                ),
+            ),
+            (
+                "Mechanical Enforcement",
+                "\n".join(
+                    [
+                        "Preferred order: compiler -> linter -> tests -> structural checks -> CI.",
+                        "Every failure should name the rule, the violating file, and the next safe fix.",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def design_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Design Principles")
-        + f"""## Operating Principle
-
-Humans steer. Agents execute. The repo must contain enough context, commands, and feedback for `{ctx.primary_agent}` to solve problems without guessing.
-
-## Agent Coding Rules
-
-1. **Think Before Coding**: Do not assume hidden requirements. Surface tradeoffs. State assumptions explicitly. If a decision is risky and cannot be discovered from repo context, ask.
-2. **Simplicity First**: Write the minimum code that solves the verified problem. Avoid speculative abstractions, unused features, and framework churn.
-3. **Surgical Changes**: Touch only what the task requires. Clean up your own changes. Do not improve adjacent code as a side mission.
-4. **Goal-Driven Execution**: Convert every task into success criteria, run checks, and keep looping until the criteria are met or a blocker is recorded.
-
-## Harness Design Rules
-
-- Prefer explicit files, commands, and tests over conversational memory.
-- Make important instructions discoverable from `AGENTS.md`.
-- Keep root docs concise and route details to focused files.
-- Update docs when behavior, architecture, or operations change.
-- Convert repeated manual fixes into scripts, tests, linters, or runbooks.
-
-## Tech Stack Notes
-
-Primary stack: `{ctx.tech_stack}`
-
-Document stack-specific conventions here:
-
-- Package manager and install command: `{{INSTALL_COMMAND}}`
-- Development server command: `{{DEV_COMMAND}}`
-- Test command: `{{TEST_COMMAND}}`
-- Lint command: `{{LINT_COMMAND}}`
-- Typecheck command: `{{TYPECHECK_COMMAND}}`
-- Build command: `{{BUILD_COMMAND}}`
-
-## Change Discipline
-
-- Preserve existing style unless the task is explicitly a style or refactor task.
-- Prefer local helpers and existing patterns before adding dependencies.
-- Add dependencies only when they remove meaningful complexity and are justified in the plan.
-- Keep PRs small enough for agent review and fast validation.
-"""
+    return make_doc(
+        "Design Principles",
+        [
+            (
+                "Operating Principle",
+                f"Use the minimum persistent structure that helps `{ctx.primary_agent}` orient, validate, or recover. Do not grow decorative docs.",
+            ),
+            (
+                "Agent Coding Rules",
+                "\n".join(
+                    [
+                        "1. State risky assumptions when they cannot be derived from repo context.",
+                        "2. Prefer surgical changes over opportunistic refactors.",
+                        "3. Turn repeated manual fixes into scripts, tests, or runbooks.",
+                    ]
+                ),
+            ),
+            (
+                "Tech Stack Notes",
+                "\n".join(
+                    [
+                        f"- Primary stack: `{ctx.tech_stack}`",
+                        "- Install command: `{{INSTALL_COMMAND}}`",
+                        "- Validation command: `{{FULL_VALIDATION_COMMAND}}`",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def frontend_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Frontend Standards")
-        + f"""## Scope
-
-Use this file for UI, browser, accessibility, client state, styling, and visual verification decisions in `{ctx.project_name}`.
-
-## Required Practices
-
-- Keep UI state close to where it is used unless shared state is clearly required.
-- Use existing component libraries, tokens, routing, and data-loading patterns.
-- Validate user-visible flows in a browser when layout, interaction, or rendering changes.
-- Ensure text does not overlap, overflow controls, or rely on viewport-scaled font sizes.
-- Use accessible labels, focus states, keyboard paths, and semantic elements.
-- Avoid generic decorative UI that does not serve the product workflow.
-
-## Verification
-
-For UI changes, record at least one of:
-
-- Browser smoke flow.
-- Component/unit test.
-- Screenshot comparison or manual screenshot note.
-- Console error check.
-- Accessibility check.
-
-## Project-Specific Frontend Commands
-
-- Dev server: `{{FRONTEND_DEV_COMMAND}}`
-- Test: `{{FRONTEND_TEST_COMMAND}}`
-- Lint/typecheck: `{{FRONTEND_CHECK_COMMAND}}`
-"""
+    return make_doc(
+        "Frontend Standards",
+        [
+            (
+                "Required Practices",
+                "\n".join(
+                    [
+                        "- Validate user-visible changes in a browser.",
+                        "- Keep accessibility, focus handling, and responsive text intact.",
+                        "- Record at least one deterministic UI verification path.",
+                    ]
+                ),
+            ),
+            (
+                "Verification",
+                "\n".join(
+                    [
+                        "- Dev server: `{{FRONTEND_DEV_COMMAND}}`",
+                        "- Checks: `{{FRONTEND_CHECK_COMMAND}}`",
+                        "- Browser smoke flow: `{{FRONTEND_SMOKE_COMMAND}}`",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def backend_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Backend Standards")
-        + f"""## Scope
-
-Use this file for APIs, services, persistence, jobs, integrations, queues, migrations, and server-side runtime behavior in `{ctx.project_name}`.
-
-## Required Practices
-
-- Validate all external inputs at the boundary.
-- Keep persistence details behind repository or gateway interfaces.
-- Keep business rules in service/use-case code, not route handlers or database adapters.
-- Make retries, idempotency, pagination, and timeouts explicit for external calls.
-- Treat migrations as production code with rollback or recovery notes.
-- Log enough context to diagnose failures without leaking secrets or sensitive data.
-
-## Verification
-
-For backend changes, record the relevant checks:
-
-- Unit tests for business rules.
-- Integration tests for storage or external boundaries.
-- Migration dry run or rollback note.
-- API contract tests or schema checks.
-- Local smoke command with logs.
-
-## Project-Specific Backend Commands
-
-- Server: `{{BACKEND_DEV_COMMAND}}`
-- Test: `{{BACKEND_TEST_COMMAND}}`
-- Migration: `{{MIGRATION_COMMAND}}`
-- Smoke: `{{BACKEND_SMOKE_COMMAND}}`
-"""
+    return make_doc(
+        "Backend Standards",
+        [
+            (
+                "Required Practices",
+                "\n".join(
+                    [
+                        "- Validate external input at the boundary.",
+                        "- Keep retries, timeouts, and idempotency explicit.",
+                        "- Record at least one deterministic runtime verification path.",
+                    ]
+                ),
+            ),
+            (
+                "Verification",
+                "\n".join(
+                    [
+                        "- Server: `{{BACKEND_DEV_COMMAND}}`",
+                        "- Tests: `{{BACKEND_TEST_COMMAND}}`",
+                        "- Smoke: `{{BACKEND_SMOKE_COMMAND}}`",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def plans_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Planning and Persistent Execution")
-        + f"""## Purpose
-
-`docs/exec-plans/` is the durable memory for long-running agent work. It lets `{ctx.primary_agent}` resume after context compaction, session restarts, branch switches, or review handoffs.
-
-Each active exec-plan is the trajectory index for a non-trivial task: the recoverable path from request, context, and plan through actions, decisions, validation, incidents, learnings, and closure. It is not a transcript and must not contain full chain-of-thought. Record externally visible engineering facts, concise rationale, commands, results, links, and handoff state.
-
-## When To Create a Plan
-
-Create `docs/exec-plans/active/<task-slug>.md` when a task:
-
-- Touches more than one file or subsystem.
-- Requires investigation before implementation.
-- Has meaningful risk, ambiguity, or rollback concerns.
-- May run longer than one session.
-- Needs multiple validation steps.
-
-Small one-file fixes can skip a plan if the final response records validation.
-
-## Active Plan Template
-
-```markdown
-# {{TASK_TITLE}}
-
-- Status: active
-- Owner/agent: {ctx.primary_agent}
-- Started: {{YYYY-MM-DD}}
-- Last updated: {{YYYY-MM-DD}}
-- Trajectory role: exec-plan index
-
-## User Request
-
-{{USER_REQUEST}}
-
-## Goal
-
-{{VERIFIABLE_GOAL}}
-
-## Non-Goals
-
-{{OUT_OF_SCOPE}}
-
-## Context
-
-{{RELEVANT_FILES_AND_DOCS}}
-
-## Context Read
-
-- {{FILE_OR_DOC}} - {{WHY_IT_MATTERS}}
-
-## Plan
-
-1. {{STEP}}
-2. {{STEP}}
-3. {{STEP}}
-
-## Actions Taken
-
-- {{ACTION}} - {{FILES_OR_MODULES}}
-
-## Decisions
-
-- {{DECISION}} - {{WHY}}
-
-## Decision Links
-
-- ADR: {{ADR_PATH_OR_NONE}}
-- Design doc/spec: {{DOC_PATH_OR_NONE}}
-
-## Validation
-
-- [ ] `{{COMMAND}}` - {{EXPECTED_RESULT}}
-
-## Validation Evidence
-
-- Validation log: {{VALIDATION_LOG_PATH_OR_NONE}}
-- Summary: {{RESULT_SUMMARY}}
-
-## Incident Links
-
-- Incident: {{INCIDENT_PATH_OR_NONE}}
-
-## Learnings
-
-- {{LEARNING_OR_NONE}}
-
-## Progress Log
-
-- {{YYYY-MM-DD}}: {{WHAT_CHANGED}}
-
-## Open Questions
-
-- {{QUESTION_OR_NONE}}
-
-## Follow-Ups
-
-- {{FOLLOW_UP_OR_NONE}}
-
-## Closure Notes
-
-- Outcome: {{OUTCOME_OR_PENDING}}
-- Changed files/modules: {{CHANGED_FILES_OR_MODULES}}
-- Residual risk: {{RISK_OR_NONE}}
-
-## Next Agent Handoff
-
-- Current state: {{STATE}}
-- Next recommended action: {{NEXT_ACTION}}
-- Blockers: {{BLOCKERS_OR_NONE}}
-```
-
-## Closing Work
-
-When complete:
-
-1. Record validation commands and results.
-2. Record files or modules changed.
-3. Record follow-up work that should not block the current change.
-4. Move the file from `active/` to `completed/`.
-
-## PR Discipline
-
-- Prefer short-lived PRs.
-- Keep merge gates focused on checks that catch real regressions.
-- Use agent review for larger changes, but do not replace executable validation with review.
-"""
+    return make_doc(
+        "Planning and Persistent Execution",
+        [
+            (
+                "Purpose",
+                f"`docs/exec-plans/` is the durable trajectory index for long-running work so `{ctx.primary_agent}` can resume after compaction, handoff, or restarts.",
+            ),
+            (
+                "When To Create a Plan",
+                "\n".join(
+                    [
+                        "- More than one file or subsystem changes.",
+                        "- Investigation is needed before implementation.",
+                        "- The work may last longer than one session.",
+                        "- Multiple validation steps or rollback concerns exist.",
+                    ]
+                ),
+            ),
+            (
+                "Active Plan Template",
+                "\n".join(
+                    [
+                        "- Status, owner, started date, last updated, trajectory role",
+                        "- User Request, Goal, Non-Goals, Context, Context Read",
+                        "- Plan, Actions Taken, Decisions, Decision Links",
+                        "- Validation, Validation Evidence, Incident Links, Learnings",
+                        "- Progress Log, Open Questions, Follow-Ups, Closure Notes, Next Agent Handoff",
+                    ]
+                ),
+            ),
+            (
+                "Closing Work",
+                "\n".join(
+                    [
+                        "1. Record validation commands and outcomes.",
+                        "2. Record changed files or modules.",
+                        "3. Move the plan from `active/` to `completed/`.",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def product_sense_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Product Sense")
-        + f"""## Product Summary
-
-{ctx.project_description}
-
-## Core Domains
-
-{ctx.domain_bullets}
-
-## Primary Users
-
-- `{{PRIMARY_USER}}`: `{{USER_GOAL}}`
-- `{{SECONDARY_USER}}`: `{{USER_GOAL}}`
-
-## Core Journeys
-
-1. `{{JOURNEY_NAME}}`: `{{USER_INTENT}}` -> `{{SUCCESSFUL_OUTCOME}}`
-2. `{{JOURNEY_NAME}}`: `{{USER_INTENT}}` -> `{{SUCCESSFUL_OUTCOME}}`
-
-## Product Principles
-
-- Prefer workflows that are clear, recoverable, and observable.
-- Optimize for the user's real job, not for demo-only completeness.
-- Do not add product behavior that is not in a spec, issue, user request, or accepted decision.
-- If behavior is ambiguous, document the assumption or ask before implementation.
-
-## Non-Goals
-
-- `{{NON_GOAL}}`
-
-## Product Decision Sources
-
-- Specs: `docs/product-specs/`
-- Design docs: `docs/design-docs/`
-- ADRs: `docs/adr/`
-- Completed plans: `docs/exec-plans/completed/`
-"""
+    return make_doc(
+        "Product Sense",
+        [
+            ("Product Summary", ctx.project_description),
+            ("Core Domains", ctx.domain_bullets),
+            (
+                "Decision Sources",
+                "\n".join(
+                    [
+                        "- `docs/product-specs/`",
+                        "- `docs/design-docs/`",
+                        "- `docs/adr/`",
+                        "- `docs/exec-plans/completed/`",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def quality_score_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Quality Score")
-        + f"""## Goal
-
-Quality means `{ctx.project_name}` can be changed repeatedly by agents without silent regressions, architectural drift, or unreproducible bugs.
-
-## Scorecard
-
-Grade each changed module from 0 to 4:
-
-- 0: No clear owner, no tests, no validation, unclear boundaries.
-- 1: Basic behavior works, but checks are manual or incomplete.
-- 2: Main paths covered by automated checks; boundaries mostly clear.
-- 3: Edge cases, failure modes, and integration points are covered.
-- 4: Checks are fast, deterministic, remediation-oriented, and documented.
-
-## Minimum Bar For Changes
-
-- Run the narrowest meaningful validation command.
-- Add or update tests when behavior changes.
-- Add regression coverage for bug fixes unless impractical; record why if skipped.
-- Keep failing command output actionable for agents.
-- Update affected docs or plans when contracts change.
-
-## Validation Layers
-
-- Formatting: `{{FORMAT_COMMAND}}`
-- Linting: `{{LINT_COMMAND}}`
-- Type checking: `{{TYPECHECK_COMMAND}}`
-- Unit tests: `{{UNIT_TEST_COMMAND}}`
-- Integration tests: `{{INTEGRATION_TEST_COMMAND}}`
-- End-to-end or smoke tests: `{{SMOKE_COMMAND}}`
-- Build: `{{BUILD_COMMAND}}`
-
-## Review Checklist
-
-- Does the change satisfy the user request?
-- Are boundaries preserved?
-- Are inputs validated at the edge?
-- Are errors observable and actionable?
-- Are secrets and sensitive data protected?
-- Is there a recorded validation result?
-"""
+    return make_doc(
+        "Quality Score",
+        [
+            (
+                "Goal",
+                f"Quality means `{ctx.project_name}` can be changed repeatedly by agents without silent regressions or unrecoverable state.",
+            ),
+            (
+                "Minimum Bar For Changes",
+                "\n".join(
+                    [
+                        "- Run the narrowest meaningful validation command.",
+                        "- Add or update regression coverage when behavior changes.",
+                        "- Keep failure output actionable for the next agent.",
+                    ]
+                ),
+            ),
+            (
+                "Validation Layers",
+                "\n".join(
+                    [
+                        "- Formatting: `{{FORMAT_COMMAND}}`",
+                        "- Linting: `{{LINT_COMMAND}}`",
+                        "- Type checking: `{{TYPECHECK_COMMAND}}`",
+                        "- Tests: `{{UNIT_TEST_COMMAND}}`",
+                        "- Smoke: `{{SMOKE_COMMAND}}`",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def reliability_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Reliability and Operations")
-        + f"""## Goal
-
-Agents must be able to run, observe, debug, and recover `{ctx.project_name}` locally or in ephemeral workspaces.
-
-## Local Runtime
-
-Document the canonical local commands:
-
-- Install: `{{INSTALL_COMMAND}}`
-- Start app: `{{DEV_COMMAND}}`
-- Start dependencies: `{{DEPENDENCIES_COMMAND}}`
-- Seed data: `{{SEED_COMMAND}}`
-- Health check: `{{HEALTH_CHECK_COMMAND}}`
-- Full validation: `{{FULL_VALIDATION_COMMAND}}`
-
-## Ephemeral Workspaces
-
-For risky or long-running changes:
-
-- Use a clean worktree or disposable checkout.
-- Start only the services required for the task.
-- Record ports, environment variables, seeded data, and logs in the active plan.
-- Clean up background processes before handing off.
-
-## Observability
-
-Runtime systems should expose:
-
-- Structured logs with request/job identifiers.
-- Health checks for critical dependencies.
-- Metrics or counters for important workflows.
-- Error traces with enough context to reproduce.
-- Browser console and network information for frontend failures.
-
-## Debugging Requirements
-
-When fixing a bug:
-
-1. Reproduce it.
-2. Identify the failing boundary or invariant.
-3. Add a regression check when practical.
-4. Record validation in the active plan or final response.
-
-## Incidents
-
-Create `docs/incidents/<date>-<slug>.md` for user-impacting failures. Include impact, timeline, root cause, fix, validation, and follow-up prevention.
-"""
+    return make_doc(
+        "Reliability and Maintenance",
+        [
+            (
+                "Goal",
+                f"Agents must be able to run, observe, debug, and clean up `{ctx.project_name}` without relying on conversational memory.",
+            ),
+            (
+                "Local Runtime",
+                "\n".join(
+                    [
+                        "- Install: `{{INSTALL_COMMAND}}`",
+                        "- Start app: `{{DEV_COMMAND}}`",
+                        "- Health check: `{{HEALTH_CHECK_COMMAND}}`",
+                        "- Full validation: `{{FULL_VALIDATION_COMMAND}}`",
+                    ]
+                ),
+            ),
+            (
+                "Harness Maintenance Loop",
+                "\n".join(
+                    [
+                        "- Run a doc drift scan regularly.",
+                        "- Clear unresolved placeholders before calling the harness complete.",
+                        "- Review stale active plans and either update or close them.",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def security_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Security Baseline")
-        + f"""## Scope
-
-Security rules apply to code, docs, generated artifacts, test fixtures, local scripts, CI, and deployment configuration in `{ctx.project_name}`.
-
-## Required Practices
-
-- Never commit secrets, tokens, private keys, production credentials, or real user data.
-- Keep example environment files explicit and non-sensitive.
-- Validate and sanitize untrusted input at the boundary.
-- Enforce authorization near protected resources and business operations.
-- Use least-privilege credentials for local, CI, staging, and production environments.
-- Avoid logging secrets, tokens, credentials, or sensitive personal data.
-- Review dependency additions for maintenance, license, and supply-chain risk.
-
-## Agent Rules
-
-- If a task requires a secret, ask the user to provide it through the approved runtime mechanism.
-- If a secret is found in the repo, stop and report it; do not copy it into plans or logs.
-- If security posture changes, update this file or the relevant runbook.
-
-## Verification
-
-- Dependency audit: `{{DEPENDENCY_AUDIT_COMMAND}}`
-- Secret scan: `{{SECRET_SCAN_COMMAND}}`
-- Auth/security tests: `{{SECURITY_TEST_COMMAND}}`
-"""
+    return make_doc(
+        "Security Baseline",
+        [
+            (
+                "Required Practices",
+                "\n".join(
+                    [
+                        "- Never commit secrets, tokens, private keys, or real user data.",
+                        "- Keep auth and authorization close to protected operations.",
+                        "- Avoid logging sensitive payloads into plans, validation logs, or incidents.",
+                    ]
+                ),
+            ),
+            (
+                "Verification",
+                "\n".join(
+                    [
+                        "- Dependency audit: `{{DEPENDENCY_AUDIT_COMMAND}}`",
+                        "- Secret scan: `{{SECRET_SCAN_COMMAND}}`",
+                        "- Security checks: `{{SECURITY_TEST_COMMAND}}`",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def core_beliefs_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Core Beliefs")
-        + f"""## Agent-First Development
-
-The working model is: `Agent = Model + Harness`.
-
-Humans steer by setting goals, constraints, and review standards. Agents execute by reading repo-local context, making changes, running checks, and recording outcomes.
-
-## Repository Is Truth
-
-Knowledge outside the repository is invisible to future agents. Convert decisions, product behavior, operational recipes, and validation lessons into committed files.
-
-## Feedback Beats Memory
-
-Prefer tools that fail loudly and explain how to fix the failure. Linters, tests, scripts, and health checks should teach `{ctx.primary_agent}` the next safe action.
-
-## Parse At The Boundary
-
-Do not guess data shapes. Validate external input, configuration, persisted records, API responses, and generated content at explicit boundaries.
-
-## Anti-Entropy
-
-Repeated mistakes should become shared utilities, checks, examples, or runbooks. Do not let agents repeatedly hand-roll the same fragile helper.
-
-## Fast, Recoverable Iteration
-
-Prefer small changes with visible validation. Minor non-blocking follow-ups should be recorded and handled in later focused work instead of expanding the current change indefinitely.
-"""
+    return make_doc(
+        "Core Beliefs",
+        [
+            ("Agent-First Development", "Agent = Model + Harness. Keep the harness thin, legible, and executable."),
+            ("Repository Is Truth", "Important decisions, validation paths, and recovery knowledge must live in repo-readable files."),
+            ("Feedback Beats Memory", "Prefer scripts and checks that fail loudly over prose that agents must reinterpret."),
+        ],
     )
 
 
 def local_development_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Local Development Runbook")
-        + f"""## Purpose
-
-This runbook should let a new agent start `{ctx.project_name}` from a clean checkout.
-
-## Setup
-
-1. Install dependencies: `{{INSTALL_COMMAND}}`
-2. Create local env file: `{{ENV_SETUP_COMMAND}}`
-3. Start dependencies: `{{DEPENDENCIES_COMMAND}}`
-4. Run migrations: `{{MIGRATION_COMMAND}}`
-5. Seed data: `{{SEED_COMMAND}}`
-6. Start app: `{{DEV_COMMAND}}`
-
-## Health Check
-
-- Command or URL: `{{HEALTH_CHECK_COMMAND_OR_URL}}`
-- Expected result: `{{EXPECTED_HEALTH_RESULT}}`
-
-## Common Failures
-
-- `{{ERROR_MESSAGE}}`: `{{REMEDIATION}}`
-
-## Cleanup
-
-- Stop services: `{{STOP_COMMAND}}`
-- Remove local generated state: `{{CLEAN_COMMAND}}`
-"""
+    return make_doc(
+        "Local Development Runbook",
+        [
+            (
+                "Setup",
+                "\n".join(
+                    [
+                        "1. Install dependencies: `{{INSTALL_COMMAND}}`",
+                        "2. Start dependencies: `{{DEPENDENCIES_COMMAND}}`",
+                        "3. Start the app: `{{DEV_COMMAND}}`",
+                    ]
+                ),
+            ),
+            (
+                "Health Check",
+                "\n".join(
+                    [
+                        "- Command or URL: `{{HEALTH_CHECK_COMMAND_OR_URL}}`",
+                        "- Expected result: `{{EXPECTED_HEALTH_RESULT}}`",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def debugging_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Debugging Runbook")
-        + f"""## First Response
-
-1. Reproduce the issue with the smallest command or user flow.
-2. Capture exact inputs, environment, logs, screenshots, and versions.
-3. Identify whether the failure is frontend, backend, data, integration, infrastructure, or documentation.
-4. Create an active plan if the fix is not trivial.
-
-## Evidence To Capture
-
-- Failing command or browser steps.
-- Expected vs actual behavior.
-- Relevant logs and trace IDs.
-- Network requests, status codes, and payload shapes.
-- Database records or fixture data, if relevant.
-- Recent changes that may have affected the path.
-
-## Fix Discipline
-
-- Fix the cause, not only the symptom.
-- Add a regression check when practical.
-- Update a runbook when diagnosis required non-obvious steps.
-- Record validation before closing the plan.
-"""
+    return make_doc(
+        "Debugging Runbook",
+        [
+            (
+                "First Response",
+                "\n".join(
+                    [
+                        "1. Reproduce the issue with the smallest command or flow.",
+                        "2. Capture exact inputs, environment, logs, and versions.",
+                        "3. Create or update an exec-plan if the fix is not trivial.",
+                    ]
+                ),
+            ),
+            (
+                "Fix Discipline",
+                "\n".join(
+                    [
+                        "- Fix the cause, not only the symptom.",
+                        "- Add a regression check when practical.",
+                        "- Leave behind a runbook update if diagnosis was non-obvious.",
+                    ]
+                ),
+            ),
+        ],
     )
 
 
 def validation_log_template_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Validation Log Template")
-        + f"""Use this template when a task has meaningful validation evidence that should survive the session.
-
-Validation logs are the evidence layer for an exec-plan-indexed trajectory. Summarize observable command results, artifacts, and residual risk. Do not paste secrets, credentials, sensitive payloads, or raw logs that contain private data.
-
-```markdown
-# Validation: {{TASK_OR_CHANGE}}
-
-- Date: {{YYYY-MM-DD}}
-- Agent: {ctx.primary_agent}
-- Branch/worktree: {{BRANCH_OR_WORKTREE}}
-- Related exec-plan: {{EXEC_PLAN_PATH}}
-
-## Commands
-
-| Command | Result | Notes |
-| --- | --- | --- |
-| `{{COMMAND}}` | pass/fail/skipped | {{NOTES}} |
-
-## Manual Checks
-
-- {{CHECK}}: {{RESULT}}
-
-## Artifacts
-
-- Logs: {{PATH_OR_NONE}}
-- Screenshots: {{PATH_OR_NONE}}
-- Traces: {{PATH_OR_NONE}}
-
-## Residual Risk
-
-- {{RISK_OR_NONE}}
-```
-"""
+    return make_doc(
+        "Validation Log Template",
+        [
+            (
+                "Template",
+                "\n".join(
+                    [
+                        "- Date: {{YYYY-MM-DD}}",
+                        f"- Agent: {ctx.primary_agent}",
+                        "- Related exec-plan: {{EXEC_PLAN_PATH}}",
+                        "- Commands and pass/fail notes",
+                        "- Manual checks, artifacts, and residual risk",
+                    ]
+                ),
+            )
+        ],
     )
 
 
 def incident_template_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Incident Record Template")
-        + f"""Use this template for user-impacting failures, data risk, availability issues, or trust-impacting regressions.
-
-Incident records are the failure branch of an exec-plan-indexed trajectory. Keep the record factual and auditable; link back to the active or completed exec-plan that drove the investigation or fix.
-
-```markdown
-# Incident: {{INCIDENT_TITLE}}
-
-- Status: open/resolved
-- Opened: {{YYYY-MM-DD}}
-- Owner/agent: {ctx.primary_agent}
-- Severity: {{SEVERITY}}
-- Related exec-plan: {{EXEC_PLAN_PATH}}
-
-## Impact
-
-{{WHO_OR_WHAT_WAS_AFFECTED}}
-
-## Timeline
-
-- {{TIMESTAMP}}: {{OBSERVED_FACT}}
-
-## Root Cause
-
-{{ROOT_CAUSE_OR_CURRENT_HYPOTHESIS}}
-
-## Fix
-
-{{FIX_SUMMARY}}
-
-## Validation Evidence
-
-- {{COMMAND_OR_CHECK}} - {{RESULT}}
-- Validation log: {{VALIDATION_LOG_PATH_OR_NONE}}
-
-## Prevention Follow-Ups
-
-- {{FOLLOW_UP_OR_NONE}}
-
-## Learnings
-
-- {{LEARNING_OR_NONE}}
-```
-"""
+    return make_doc(
+        "Incident Record Template",
+        [
+            (
+                "Template",
+                "\n".join(
+                    [
+                        "- Status, opened date, owner, severity",
+                        "- Related exec-plan",
+                        "- Impact, timeline, root cause, fix",
+                        "- Validation evidence and prevention follow-ups",
+                    ]
+                ),
+            )
+        ],
     )
 
 
 def runbook_template_md(ctx: HarnessContext) -> str:
-    return (
-        h1("Runbook Template")
-        + f"""Use this template when repeated setup, debugging, operations, or recovery steps should become executable shared knowledge.
-
-Runbooks are the learned operation layer of an exec-plan-indexed trajectory. They should grow from completed plans, validation logs, and incident records when a workflow is likely to repeat.
-
-```markdown
-# Runbook: {{OPERATION_NAME}}
-
-- Owner/agent: {ctx.primary_agent}
-- Last verified: {{YYYY-MM-DD}}
-- Related exec-plan: {{EXEC_PLAN_PATH_OR_NONE}}
-- Related incident: {{INCIDENT_PATH_OR_NONE}}
-
-## Purpose
-
-{{WHAT_THIS_RUNBOOK_HELPS_AN_AGENT_DO}}
-
-## Prerequisites
-
-- {{REQUIRED_SERVICE_OR_CONTEXT}}
-
-## Procedure
-
-1. {{STEP}}
-2. {{STEP}}
-3. {{STEP}}
-
-## Validation
-
-- `{{COMMAND_OR_CHECK}}` - {{EXPECTED_RESULT}}
-
-## Rollback or Recovery
-
-- {{RECOVERY_STEP_OR_NONE}}
-
-## Common Failures
-
-- {{SYMPTOM}}: {{REMEDIATION}}
-
-## Learnings
-
-- {{LEARNING_OR_NONE}}
-```
-"""
+    return make_doc(
+        "Runbook Template",
+        [
+            (
+                "Template",
+                "\n".join(
+                    [
+                        "- Purpose, prerequisites, procedure, validation, rollback, common failures",
+                        "- Related exec-plan and incident when relevant",
+                    ]
+                ),
+            )
+        ],
     )
 
 
 def adr_md(ctx: HarnessContext) -> str:
-    return (
-        h1("ADR 0001: Agent Harness Constitution")
-        + f"""- Status: accepted
-- Date: {ctx.generated_on}
-
-## Context
-
-`{ctx.project_name}` is adopting an agent-first operating model. Future agents need durable project context, executable checks, and resumable task state.
-
-## Decision
-
-The repository will maintain a harness constitution made of concise root docs, focused `docs/` directories, active execution plans, validation records, runbooks, and architecture decision records.
-
-## Consequences
-
-- Important project knowledge must be written into the repo.
-- Long-running work should update `docs/exec-plans/active/`.
-- Repeated review comments should become automated checks or runbook updates.
-- `AGENTS.md` stays a map and should not become a giant prompt.
-
-## Validation
-
-Check that the root docs exist, `AGENTS.md` links are valid, and local setup/validation commands are documented.
-"""
+    return make_doc(
+        "ADR 0001: Thin Harness Constitution",
+        [
+            ("Context", f"`{ctx.project_name}` needs durable project context and executable checks for long-running agent work."),
+            ("Decision", "Adopt a thin harness: short map, focused docs, deterministic scripts, and persistent trajectory records."),
+            ("Consequences", "\n".join(["- Keep AGENTS.md short.", "- Prefer scripts over repeated prose.", "- Run recurring drift checks."])),
+        ],
     )
 
 
-def ensure_dirs(root: Path, dry_run: bool) -> list[str]:
+ROOT_TEMPLATE_BUILDERS = {
+    "AGENTS.md": agents_md,
+    "ARCHITECTURE.md": architecture_md,
+    "DESIGN.md": design_md,
+    "FRONTEND.md": frontend_md,
+    "BACKEND.md": backend_md,
+    "PLANS.md": plans_md,
+    "PRODUCT_SENSE.md": product_sense_md,
+    "QUALITY_SCORE.md": quality_score_md,
+    "RELIABILITY.md": reliability_md,
+    "SECURITY.md": security_md,
+}
+
+
+def adapter_templates(ctx: HarnessContext) -> dict[str, str]:
+    if ctx.emit_adapters == "none":
+        return {}
+
+    targets: set[str] = set()
+    if ctx.emit_adapters == "all":
+        targets = {
+            ".cursor/rules/harness.mdc",
+            ".trae/rules/harness.md",
+            ".claude/commands/harness.md",
+            ".codex/skills/openai-harness-engineering/SKILL.md",
+        }
+    elif ctx.primary_agent.lower() == "cursor":
+        targets.add(".cursor/rules/harness.mdc")
+    elif ctx.primary_agent.lower() == "trae":
+        targets.add(".trae/rules/harness.md")
+    elif ctx.primary_agent.lower() in {"claude", "claude code"}:
+        targets.add(".claude/commands/harness.md")
+    elif ctx.primary_agent.lower() == "codex":
+        targets.add(".codex/skills/openai-harness-engineering/SKILL.md")
+
+    content = (
+        "# Harness Adapter\n\n"
+        "Read `AGENTS.md` first, then follow `PLANS.md`, `QUALITY_SCORE.md`, and "
+        "`RELIABILITY.md`. Do not duplicate the harness constitution here.\n"
+    )
+    return {path: content for path in targets}
+
+
+def manifest_dirs(ctx: HarnessContext) -> list[str]:
+    dirs = list(BASE_DIRS)
+    if ctx.include_ops:
+        dirs.extend(OPS_DIRS)
+    return dirs
+
+
+def ensure_dirs(root: Path, ctx: HarnessContext, dry_run: bool) -> list[str]:
     created: list[str] = []
-    for rel in DOC_DIRS:
+    for rel in manifest_dirs(ctx):
         path = root / rel
         if path.exists():
             continue
@@ -920,8 +811,39 @@ def ensure_dirs(root: Path, dry_run: bool) -> list[str]:
     return created
 
 
+def split_sections(text: str) -> dict[str, str]:
+    pattern = re.compile(
+        rf"{re.escape(SECTION_BEGIN)}(?P<name>.+?) -->\n(?P<body>.*?){re.escape(SECTION_END)}(?P=name) -->",
+        re.DOTALL,
+    )
+    sections: dict[str, str] = {}
+    for match in pattern.finditer(text):
+        sections[match.group("name")] = match.group("body").rstrip()
+    return sections
+
+
+def merge_managed(existing: str, generated: str) -> str | None:
+    if MANAGED_HEADER not in existing:
+        return None
+
+    existing_sections = split_sections(existing)
+    generated_sections = split_sections(generated)
+    missing = [name for name in generated_sections if name not in existing_sections]
+    if not missing:
+        return existing
+
+    merged = existing.rstrip() + "\n\n"
+    for name in missing:
+        merged += f"{SECTION_BEGIN}{name} -->\n{generated_sections[name]}\n{SECTION_END}{name} -->\n\n"
+    return merged.rstrip() + "\n"
+
+
 def write_files(
-    root: Path, files: dict[str, str], *, force: bool, dry_run: bool
+    root: Path,
+    files: dict[str, str],
+    *,
+    force: bool,
+    dry_run: bool,
 ) -> tuple[list[str], list[str], list[str]]:
     created: list[str] = []
     updated: list[str] = []
@@ -930,16 +852,25 @@ def write_files(
     for rel, content in files.items():
         path = root / rel
         if path.exists():
-            existing = path.read_text(encoding="utf-8")
+            existing = path.read_text(encoding="utf-8", errors="ignore")
             if existing == content:
                 skipped.append(rel + " (unchanged)")
                 continue
+
+            merged = merge_managed(existing, content)
+            if merged is not None and merged != existing:
+                updated.append(rel + " (appended managed sections)")
+                if not dry_run:
+                    path.write_text(merged, encoding="utf-8")
+                continue
+
             if not force:
-                skipped.append(rel + " (exists; use --force only with approval)")
+                skipped.append(rel + " (exists; preserved)")
                 continue
             updated.append(rel)
         else:
             created.append(rel)
+
         if not dry_run:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
@@ -947,9 +878,9 @@ def write_files(
     return created, updated, skipped
 
 
-def write_gitkeeps(root: Path, dry_run: bool) -> list[str]:
+def write_gitkeeps(root: Path, ctx: HarnessContext, dry_run: bool) -> list[str]:
     created: list[str] = []
-    for rel in DOC_DIRS:
+    for rel in manifest_dirs(ctx):
         keep = root / rel / ".gitkeep"
         if keep.exists():
             continue
@@ -963,32 +894,12 @@ def write_gitkeeps(root: Path, dry_run: bool) -> list[str]:
 def write_manifest(
     root: Path,
     ctx: HarnessContext,
-    file_paths: list[str],
+    managed_files: list[str],
     *,
     force: bool,
     dry_run: bool,
 ) -> tuple[str, str | None]:
     rel = "docs/generated/harness-manifest.json"
-    required_exec_plan_sections = [
-        "User Request",
-        "Goal",
-        "Non-Goals",
-        "Context",
-        "Context Read",
-        "Plan",
-        "Actions Taken",
-        "Decisions",
-        "Decision Links",
-        "Validation",
-        "Validation Evidence",
-        "Incident Links",
-        "Learnings",
-        "Progress Log",
-        "Open Questions",
-        "Follow-Ups",
-        "Closure Notes",
-        "Next Agent Handoff",
-    ]
     manifest = {
         "project_name": ctx.project_name,
         "project_description": ctx.project_description,
@@ -996,28 +907,29 @@ def write_manifest(
         "domains": ctx.domain_list,
         "primary_agent": ctx.primary_agent,
         "generated_on": ctx.generated_on,
+        "profile": ctx.profile,
+        "enabled_surfaces": ctx.enabled_surfaces,
+        "agents_map_max_lines": 120,
+        "required_commands": ctx.required_commands,
+        "doc_gardening_required": True,
         "trajectory_model": "exec-plan-indexed",
         "exec_plan_index_pattern": "docs/exec-plans/active/<task>.md -> docs/exec-plans/completed/<task>.md",
         "trajectory_related_dirs": {
-            "context": ["AGENTS.md", "ARCHITECTURE.md", "PRODUCT_SENSE.md", "docs/references/"],
             "plans": ["docs/exec-plans/active/", "docs/exec-plans/completed/"],
-            "decisions": ["docs/adr/", "docs/design-docs/"],
             "validation": ["docs/validation/"],
-            "incidents": ["docs/incidents/"],
-            "learnings": ["docs/runbooks/"],
+            "runbooks": ["docs/runbooks/"],
+            "generated": ["docs/generated/"],
         },
-        "required_exec_plan_sections": required_exec_plan_sections,
-        "managed_root_files": ROOT_FILES,
-        "managed_files": sorted(file_paths + [rel]),
-        "note": "Generated by openai-harness-engineering. Existing files are preserved unless --force is used.",
+        "managed_root_files": sorted(PROFILE_ROOT_FILES[ctx.profile]),
+        "managed_files": sorted(managed_files + [rel]),
     }
     content = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
     path = root / rel
     existed = path.exists()
-    if existed and path.read_text(encoding="utf-8") == content:
+    if existed and path.read_text(encoding="utf-8", errors="ignore") == content:
         return "skipped", rel + " (unchanged)"
     if existed and not force:
-        return "skipped", rel + " (exists; use --force only with approval)"
+        return "skipped", rel + " (exists; preserved)"
     if not dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
@@ -1033,9 +945,7 @@ def print_summary(
     manifest_result: tuple[str, str | None],
     dry_run: bool,
 ) -> None:
-    prefix = "Dry run complete" if dry_run else "Harness initialization complete"
-    print(prefix)
-
+    print("Dry run complete" if dry_run else "Harness initialization complete")
     if dirs:
         print("\nDirectories:")
         for item in dirs:
@@ -1070,21 +980,11 @@ def print_summary(
 def main() -> None:
     args = parse_args()
     root = Path(args.target).resolve()
-    ctx = HarnessContext(
-        project_name=args.project_name,
-        project_description=args.project_description,
-        tech_stack=args.tech_stack,
-        domains=args.domains,
-        primary_agent=args.primary_agent,
-        generated_on=dt.date.today().isoformat(),
-    )
-
+    ctx = build_context(args, root)
     files = templates(ctx)
-    dirs = ensure_dirs(root, args.dry_run)
-    created, updated, skipped = write_files(
-        root, files, force=args.force, dry_run=args.dry_run
-    )
-    gitkeeps = write_gitkeeps(root, args.dry_run)
+    dirs = ensure_dirs(root, ctx, args.dry_run)
+    created, updated, skipped = write_files(root, files, force=args.force, dry_run=args.dry_run)
+    gitkeeps = write_gitkeeps(root, ctx, args.dry_run)
     manifest_result = write_manifest(
         root,
         ctx,

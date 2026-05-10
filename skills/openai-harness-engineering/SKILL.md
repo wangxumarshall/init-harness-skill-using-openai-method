@@ -1,69 +1,63 @@
 ---
 name: openai-harness-engineering
-description: Initialize, audit, or operate an OpenAI-style agent harness for a new or existing software project. Use when the user asks for Harness Engineering, agent-first scaffolding, AGENTS.md/project constitution, persistent execution plans, long-running agent workflows, repo knowledge systems, or making a project easier for Codex/Cursor/Claude/Trae/Gemini/OpenCode agents to run, debug, and improve over time.
+description: Initialize, audit, or operate a thin OpenAI-style harness for a new or existing software project. Use when the user asks for Harness Engineering, agent-first scaffolding, AGENTS.md/project constitution, persistent execution plans, long-running agent workflows, repo knowledge systems, or making a project easier for coding agents to run, debug, and improve over time.
 license: MIT
 ---
 
 # OpenAI Harness Engineering
 
-Use this skill to turn a project repository into an agent-legible operating environment. The goal is not only to create docs; it is to give future agents enough context, commands, feedback loops, and persistent state to solve problems over many sessions.
+Use this skill to turn a repository into an agent-legible operating environment. The point is not to create a large constitution. The point is to give future agents enough context, deterministic commands, feedback loops, and persistent state to solve problems over many sessions.
 
-Core model: **Agent = Model + Harness**. Humans steer; agents execute. The repository is the system of record.
+Core model: **Agent = Model + Harness**.
+
+- Model: interpretation, comparison, judgment, reporting.
+- Scripts: repeated deterministic mechanics.
+- Repo docs: durable state and discoverable constraints.
+
+As models get stronger, the prose layer should shrink while the mechanical layer gets sharper.
 
 ## What This Skill Does
 
-- Initializes a concise agent constitution and docs tree.
-- Creates persistent execution-plan, validation, incident, runbook, and ADR locations.
-- Uses `exec-plans` as the trajectory index for recoverable agent work without renaming existing harness concepts.
-- Guides long-running work so state survives context compaction, restarts, and handoffs.
-- Emphasizes mechanical enforcement: tests, linters, structural checks, CI, and remediation-oriented errors.
-- Audits existing harness docs for gaps and drift.
+- Initializes a thin harness with profile-based scaffolding.
+- Creates persistent execution-plan, validation, runbook, and manifest locations.
+- Uses `exec-plans` as the trajectory index for recoverable long-running work.
+- Audits both structure and live workflow quality.
+- Adds drift checks so the harness can shed stale or decorative structure.
+- Includes eval guidance and scripts for regression-testing the skill.
 
 ## When To Read References
 
-- For conceptual grounding and deeper analysis, read `references/openai_harness_notes.md`.
-- For the generated file list and ownership rules, read `references/generated_files.md`.
+- For conceptual grounding, read `references/openai_harness_notes.md`.
+- For generated files and profile behavior, read `references/generated_files.md`.
 - For persistent operating workflows, read `references/operations.md`.
-- For maintaining or evaluating this skill, read `references/evaluation.md`.
+- For maintaining or evaluating the skill, read `references/evaluation.md`.
 
-Do not load every reference by default; choose the smallest one that helps the current task.
+Load only the smallest reference that helps the current task.
 
 ## Workflow
 
 ### 1. Classify the User Request
 
-- **Initialize**: user wants to add harness scaffolding to a project.
-- **Audit**: user wants a review of current agent docs, plans, or skill quality.
-- **Operate**: user wants help running a long-lived agent workflow, debugging, or maintaining project state.
-- **Explain**: user wants to understand OpenAI Harness Engineering.
+- **Initialize**: add or refresh a harness in a repo
+- **Audit**: review current harness quality and drift
+- **Operate**: create or update durable plans for non-trivial work
+- **Explain**: explain the harness model or how to apply it
 
-For this repository's own maintenance, treat the task as **Audit + Improve Skill**.
+For this repository's own maintenance, treat the task as **Audit + Dogfood + Evaluate Skill**.
 
-### 2. Gather Only Missing Facts
-
-For initialization, collect these facts if not already known:
-
-- Project name.
-- Project description.
-- Core tech stack.
-- Core business domains.
-- Primary coding agent, such as Codex, Cursor, Claude Code, Trae, Gemini, or OpenCode.
-
-If the user says to proceed with placeholders, do that. If the repo already reveals enough, infer conservatively and mention assumptions.
-
-### 3. Inspect The Target Repo First
+### 2. Inspect the Target Repo First
 
 Before writing files, check:
 
-- Existing `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `.trae/rules/`, `.codex/`, or similar agent docs.
-- Existing `docs/`, `README`, package files, CI, scripts, tests, and runbooks.
-- Whether user-authored docs already contain product or architecture facts.
+- existing `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `.trae/rules/`, `.codex/`
+- existing `docs/`, `README`, package files, CI, scripts, tests, and runbooks
+- whether the repo clearly signals frontend or backend surfaces
 
 Preserve existing content unless the user explicitly asks to overwrite.
 
-### 4. Initialize With The Script
+### 3. Initialize With the Script
 
-Prefer the bundled script for deterministic scaffolding:
+Prefer the bundled initializer:
 
 ```bash
 python3 skills/openai-harness-engineering/scripts/init_harness.py \
@@ -72,51 +66,48 @@ python3 skills/openai-harness-engineering/scripts/init_harness.py \
   --project-description "{{PROJECT_DESC}}" \
   --tech-stack "{{TECH_STACK}}" \
   --domains "{{CORE_DOMAINS}}" \
-  --primary-agent "{{CODING_AGENT}}"
+  --primary-agent "{{CODING_AGENT}}" \
+  --profile standard
 ```
 
-If running from an installed skill path, resolve the script relative to this `SKILL.md`. Use `--dry-run` before writing when the target repo already has harness files. Use `--force` only after explicit user approval.
+Profiles:
 
-The script creates:
+- `minimal`: core map, plans, quality, reliability
+- `standard`: thin core plus adaptive frontend/backend surfaces when the repo clearly needs them
+- `full`: all scaffold surfaces
 
-- Root docs: `AGENTS.md`, `ARCHITECTURE.md`, `DESIGN.md`, `FRONTEND.md`, `BACKEND.md`, `PLANS.md`, `PRODUCT_SENSE.md`, `QUALITY_SCORE.md`, `RELIABILITY.md`, `SECURITY.md`.
-- Docs tree: `docs/adr/`, `docs/design-docs/`, `docs/exec-plans/active/`, `docs/exec-plans/completed/`, `docs/generated/`, `docs/incidents/`, `docs/product-specs/`, `docs/references/`, `docs/runbooks/`, `docs/validation/`.
-- Seed files for core beliefs, local development, debugging, validation logs, incident/runbook templates, and the initial ADR.
+Useful flags:
 
-Run a quick harness audit after initialization:
+- `--include-frontend`
+- `--include-backend`
+- `--include-ops`
+- `--emit-adapters auto|none|all`
+- `--dry-run`
+- `--force`
 
-```bash
-python3 skills/openai-harness-engineering/scripts/audit_harness.py --target .
+Existing files are preserved by default. Managed documents can append missing managed sections only when they already contain the harness marker.
+
+### 4. Tailor the Harness
+
+After generation:
+
+- replace placeholders with real commands and health checks
+- link existing specs, CI workflows, and local setup docs
+- keep `AGENTS.md` short and routing-oriented
+- prefer scripts or CI over prose-only requirements
+- mark unresolved enforcement explicitly until it exists
+
+### 5. Operate the Harness
+
+For non-trivial work, create or update `docs/exec-plans/active/<task>.md`.
+
+The active exec-plan is the trajectory index:
+
+```text
+Request -> Context -> Plan -> Actions -> Decisions -> Validation -> Incidents -> Learnings -> Closure
 ```
 
-### 5. Tailor The Harness
-
-After generation, adapt placeholders using discovered repo facts:
-
-- Fill package manager, dev, build, lint, typecheck, test, smoke, migration, and seed commands.
-- Link existing specs, architecture docs, issue templates, CI workflows, and local setup docs.
-- Add domain names and module boundaries from the actual project.
-- Add known local runtime details, ports, services, logs, and health checks.
-- Keep `AGENTS.md` small. Move detail into focused docs.
-
-Every "must" should have a verification path, or be marked as pending enforcement.
-
-### 6. Operate The Harness
-
-For non-trivial project work, create or update `docs/exec-plans/active/<task>.md` with:
-
-- User request and interpreted goal.
-- Non-goals.
-- Relevant context and context actually read.
-- Plan and status.
-- Actions taken.
-- Decisions and links to ADRs, specs, or design docs.
-- Validation commands, results, and validation-log links.
-- Incident links when failures affect users, data, availability, or trust.
-- Learnings, closure notes, and next-agent handoff state.
-- Open questions and follow-ups.
-
-Treat the exec-plan as the trajectory index for the task: `Request -> Context -> Plan -> Actions -> Decisions -> Validation -> Incidents -> Learnings -> Closure`. It is not a transcript. Record externally visible engineering facts, concise rationale, commands, results, artifacts, links, and handoff state. Do not record full chain-of-thought, secrets, sensitive payloads, or raw command output that contains private data.
+Record observable engineering facts, concise rationale, commands, results, evidence, and handoff state. Do not record full chain-of-thought, secrets, or sensitive payloads.
 
 You can create a plan with:
 
@@ -129,39 +120,47 @@ python3 skills/openai-harness-engineering/scripts/new_plan.py \
   --agent "{{CODING_AGENT}}"
 ```
 
-When complete, move it to `docs/exec-plans/completed/`. For user-impacting failures, create an incident record. For repeated debugging knowledge, update a runbook.
+### 6. Audit the Harness
 
-### 7. Audit The Harness
-
-When asked to analyze or improve a harness, check:
-
-- Is `AGENTS.md` a short map rather than a giant prompt?
-- Can a new agent find architecture, product intent, commands, active work, and validation rules quickly?
-- Are docs backed by tests, linters, structural checks, CI, scripts, or runbooks?
-- Are command failures actionable enough for an agent to fix?
-- Is long-running work persisted in active/completed plans?
-- Are runtime debugging, observability, and incident loops documented?
-- Does the skill itself use progressive disclosure, scripts, references, and eval guidance?
-
-Use the audit script when possible, then apply engineering judgment to anything it cannot check:
+Use the audit script when possible:
 
 ```bash
-python3 skills/openai-harness-engineering/scripts/audit_harness.py --target .
+python3 skills/openai-harness-engineering/scripts/audit_harness.py --target . --mode full
 ```
+
+Check:
+
+- is the profile surface correct for this repo
+- can a new agent find plans, quality gates, and recovery paths quickly
+- are links valid and commands executable
+- are placeholders still unresolved
+- is recurring cleanup reachable from the core map
+- does the skill repo itself pass its own audit
+
+### 7. Run Drift Checks and Evals
+
+For maintenance:
+
+```bash
+python3 skills/openai-harness-engineering/scripts/check_harness_drift.py --target .
+python3 evals/run_evals.py
+python3 evals/grade_evals.py
+```
+
+Move durable repeated mechanics into scripts and CI when they stabilize.
 
 ## Output Expectations
 
-For initialization, summarize created, updated, and skipped files, then list immediate next steps such as filling command placeholders or running a setup smoke test.
-
-For audits, lead with concrete gaps and recommended fixes. Include file paths. If you make changes, report what changed and how you verified it.
+- For initialization: summarize created, updated, and skipped files, then list the unresolved setup debt.
+- For audits: lead with concrete failures or drift, then list recommended fixes.
+- For operations: report the exec-plan path and how validation and handoff were recorded.
 
 ## Critical Rules
 
 - Do not invent product facts.
-- Do not overwrite existing harness docs without explicit approval.
+- Do not overwrite user-authored docs without explicit approval.
 - Do not put detailed business rules in `AGENTS.md`.
 - Prefer executable enforcement over prose-only policy.
-- Record externally visible engineering facts, not full chain-of-thought.
-- Do not copy secrets, sensitive payloads, or private command output into plans, validation logs, incidents, or runbooks.
-- Keep changes surgical and repo-specific.
-- The generated harness content should be in English unless the user explicitly requests another language for project docs.
+- Keep the harness thin; do not generate surfaces the repo does not need.
+- Record observable engineering facts, not full chain-of-thought.
+- Do not copy secrets or sensitive payloads into plans, logs, incidents, or runbooks.

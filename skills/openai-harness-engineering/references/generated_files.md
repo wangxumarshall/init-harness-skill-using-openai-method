@@ -1,69 +1,55 @@
 # Generated Harness Files
 
-Use this reference when deciding what the initializer creates or updates.
+Use this reference when deciding what the initializer creates for each profile.
 
-## Root Files
+## Profiles
 
-- `AGENTS.md`: Short entry point and table of contents. It should stay small.
-- `ARCHITECTURE.md`: Layering, module boundaries, dependency rules, and enforcement strategy.
-- `DESIGN.md`: Coding taste, simplicity rules, design constraints, and agent behavior.
-- `FRONTEND.md`: Frontend-specific standards, accessibility, browser testing, and UI verification.
-- `BACKEND.md`: Backend-specific standards, API contracts, validation, persistence, and jobs.
-- `PLANS.md`: Planning workflow for active work, completed plans, and session continuity. It defines the exec-plan as the trajectory index.
-- `PRODUCT_SENSE.md`: Product goals, user journeys, domains, non-goals, and decision log links.
-- `QUALITY_SCORE.md`: Quality rubric, test expectations, coverage standards, and review checks.
-- `RELIABILITY.md`: Local environments, observability, debugging, health checks, and incident records.
-- `SECURITY.md`: Baseline security requirements, secrets handling, auth, data protection, and dependencies.
+### `minimal`
 
-## Trajectory Roles
+Creates the thin core:
 
-The generated harness keeps existing names and directories. Agent trajectory is the organizing principle that connects them:
+- `AGENTS.md`
+- `PLANS.md`
+- `QUALITY_SCORE.md`
+- `RELIABILITY.md`
+- `docs/exec-plans/{active,completed}/`
+- `docs/validation/`
+- `docs/runbooks/`
+- `docs/generated/`
 
-- `exec-plans`: trajectory index for a task.
-- `validation logs`: evidence layer for command results, smoke checks, screenshots, traces, and residual risk.
-- `incident records`: failure branch for user, data, availability, or trust impact.
-- `ADRs`: durable decision layer for architectural and operating-model decisions.
-- `runbooks`: learned operation layer for repeatable setup, debugging, recovery, and maintenance.
-- `generated manifests`: harness self-description layer, including trajectory metadata and required exec-plan sections.
+### `standard`
 
-## Docs Tree
+Creates the core plus:
 
-```text
-docs/
-├── adr/
-├── design-docs/
-├── exec-plans/
-│   ├── active/
-│   └── completed/
-├── generated/
-├── incidents/
-├── product-specs/
-├── references/
-├── runbooks/
-└── validation/
-```
+- `ARCHITECTURE.md`
+- `DESIGN.md`
+- `PRODUCT_SENSE.md`
+- `SECURITY.md`
 
-Generated templates include:
+Conditionally adds:
 
-- `docs/validation/validation-log-template.md`
-- `docs/incidents/incident-template.md`
-- `docs/runbooks/runbook-template.md`
-- `docs/generated/harness-manifest.json`
+- `FRONTEND.md` when the repo clearly signals a frontend surface
+- `BACKEND.md` when the repo clearly signals a backend surface
 
-## Optional Agent Adapter Files
+Also includes ops-oriented templates such as runbooks, validation templates, incidents, ADRs, and core beliefs.
 
-Create only when requested or useful for the user's primary agent:
+### `full`
 
-- `.cursor/rules/harness.mdc`
-- `.trae/rules/harness.md`
-- `.codex/skills/openai-harness-engineering/SKILL.md`
-- `.claude/commands/harness.md`
+Creates the full current scaffold surface, including frontend and backend docs regardless of detection.
 
-Adapters should point back to the source docs. Do not duplicate the full constitution.
+## Managed Document Rules
 
-## File Ownership Rules
+- Generated markdown docs contain a harness marker header.
+- Existing managed docs may receive missing managed sections when the same marker is already present.
+- Arbitrary user-authored docs are preserved and never appended into unless the user explicitly asks to overwrite.
 
-- Preserve existing files by default. If a generated file already exists, append missing managed sections only when clearly safe.
-- Do not overwrite product facts, architecture choices, or prior decisions unless the user explicitly asks for a refresh.
-- Generated files should include placeholders for unknown facts instead of invented details.
-- Every "must" should name a verification mechanism, or explicitly say that enforcement is pending.
+## Manifest
+
+`docs/generated/harness-manifest.json` is the machine-readable source of truth for:
+
+- selected `profile`
+- `enabled_surfaces`
+- `agents_map_max_lines`
+- `required_commands`
+- `doc_gardening_required`
+- trajectory metadata and managed files

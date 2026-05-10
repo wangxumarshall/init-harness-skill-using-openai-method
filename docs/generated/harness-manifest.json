@@ -1,0 +1,63 @@
+{
+  "project_name": "openai-harness-engineering",
+  "project_description": "A thin, durable harness skill for agent-first software projects.",
+  "tech_stack": "Python, Markdown",
+  "domains": [
+    "Harness Engineering",
+    "Agent Workflows",
+    "Skill Evaluation"
+  ],
+  "primary_agent": "Codex",
+  "generated_on": "2026-05-10",
+  "profile": "minimal",
+  "enabled_surfaces": [
+    "core"
+  ],
+  "agents_map_max_lines": 80,
+  "required_commands": [
+    {
+      "name": "compile",
+      "command": "python3 -m py_compile skills/openai-harness-engineering/scripts/*.py evals/*.py",
+      "doc": "QUALITY_SCORE.md"
+    },
+    {
+      "name": "structure-audit",
+      "command": "python3 skills/openai-harness-engineering/scripts/audit_harness.py --target . --mode structure --json >/dev/null",
+      "doc": "RELIABILITY.md"
+    }
+  ],
+  "doc_gardening_required": true,
+  "trajectory_model": "exec-plan-indexed",
+  "exec_plan_index_pattern": "docs/exec-plans/active/<task>.md -> docs/exec-plans/completed/<task>.md",
+  "trajectory_related_dirs": {
+    "plans": [
+      "docs/exec-plans/active/",
+      "docs/exec-plans/completed/"
+    ],
+    "validation": [
+      "docs/validation/"
+    ],
+    "runbooks": [
+      "docs/runbooks/"
+    ],
+    "generated": [
+      "docs/generated/"
+    ]
+  },
+  "managed_root_files": [
+    "AGENTS.md",
+    "PLANS.md",
+    "QUALITY_SCORE.md",
+    "RELIABILITY.md"
+  ],
+  "managed_files": [
+    "AGENTS.md",
+    "PLANS.md",
+    "QUALITY_SCORE.md",
+    "RELIABILITY.md",
+    "docs/exec-plans/completed/thin-harness-redesign.md",
+    "docs/generated/harness-manifest.json",
+    "docs/runbooks/harness-maintenance.md",
+    "docs/validation/self-audit.md"
+  ]
+}
