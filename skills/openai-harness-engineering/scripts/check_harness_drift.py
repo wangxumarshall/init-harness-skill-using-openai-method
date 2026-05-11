@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-PLACEHOLDER_RE = re.compile(r"\{\{[^}]+\}\}")
+PLACEHOLDER_RE = re.compile(r"\{\{[A-Z0-9_./-]+\}\}")
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 LAST_UPDATED_RE = re.compile(r"^- Last updated: (\d{4}-\d{2}-\d{2})$", re.MULTILINE)
 
@@ -114,12 +114,53 @@ def main() -> None:
 
     if manifest:
         enabled = set(manifest.get("enabled_surfaces", []))
+        automation = manifest.get("automation") or {}
         if "frontend" not in enabled and (root / "FRONTEND.md").exists():
             issues.append("FRONTEND.md exists but manifest does not enable frontend surface")
         if "backend" not in enabled and (root / "BACKEND.md").exists():
             issues.append("BACKEND.md exists but manifest does not enable backend surface")
         if "autonomy" not in enabled and (root / "AUTONOMY.md").exists():
             issues.append("AUTONOMY.md exists but manifest does not enable autonomy surface")
+        config_path = root / "docs/generated/autonomy-config.json"
+        if automation.get("enabled"):
+            declared = set(automation.get("adapter_files") or [])
+            for rel in declared:
+                if not (root / rel).exists():
+                    issues.append(f"manifest declares missing automation adapter -> {rel}")
+            if not config_path.exists():
+                issues.append("automation enabled but docs/generated/autonomy-config.json is missing")
+            else:
+                try:
+                    config = json.loads(read(config_path))
+                except json.JSONDecodeError:
+                    issues.append("docs/generated/autonomy-config.json is invalid JSON")
+                    config = {}
+                if config:
+                    if config.get("provider") != automation.get("provider"):
+                        issues.append("autonomy-config.json provider does not match manifest automation provider")
+                    if config.get("runtime") != automation.get("runtime"):
+                        issues.append("autonomy-config.json runtime does not match manifest automation runtime")
+                    if config.get("secrets") != automation.get("secret_refs"):
+                        issues.append("autonomy-config.json secrets do not match manifest secret_refs")
+            runtime = automation.get("runtime")
+            if runtime in {"ci-worker", "both"}:
+                expected = {
+                    ".github/workflows/agent-loop.yml",
+                    ".github/codex/prompts/agent-loop.md",
+                    "ops/agent-runtime/queue_worker.py",
+                    "ops/agent-runtime/monitor_and_maybe_rollback.py",
+                }
+                for rel in sorted(expected - declared):
+                    issues.append(f"runtime {runtime!r} missing ci-worker adapter declaration -> {rel}")
+            if runtime in {"app-server", "both"}:
+                expected = {
+                    "ops/agent-runtime/app_server_bridge.py",
+                    "ops/agent-runtime/app_server_schema.json",
+                }
+                for rel in sorted(expected - declared):
+                    issues.append(f"runtime {runtime!r} missing app-server adapter declaration -> {rel}")
+        elif config_path.exists():
+            issues.append("autonomy-config.json exists but manifest automation is not enabled")
 
     if issues:
         print("Drift issues:")

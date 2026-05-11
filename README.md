@@ -74,6 +74,9 @@ Useful flags:
 - `--include-ops`
 - `--include-autonomy`
 - `--emit-adapters auto|none|all`
+- `--automation-provider codex|none`
+- `--automation-runtime ci-worker|app-server|both`
+- `--emit-automation-adapters auto|none|all`
 - `--dry-run`
 - `--force`
 
@@ -132,7 +135,9 @@ This adds:
 - `AUTONOMY.md`
 - `docs/runbooks/autonomous-operations.md`
 - `docs/validation/autonomy-drill-template.md`
-- autonomy-specific manifest fields and required commands
+- `docs/generated/autonomy-config.json`
+- autonomy-specific manifest fields, automation metadata, and required commands
+- Codex-first runtime adapters such as `.github/workflows/agent-loop.yml`, `ops/agent-runtime/queue_worker.py`, and optional app-server bridge files
 
 Assess whether a repo is actually wired for unattended execution:
 
@@ -140,7 +145,7 @@ Assess whether a repo is actually wired for unattended execution:
 python3 skills/openai-harness-engineering/scripts/check_autonomy_readiness.py --target /path/to/project
 ```
 
-This stricter check expects real, runnable commands for validation, deploy, post-deploy verify, rollback, monitoring, and the unattended loop itself.
+This stricter check expects real, runnable commands for validation, deploy, post-deploy verify, rollback, monitoring, the unattended loop itself, matching automation metadata, declared secret refs, and runtime-specific adapter files.
 
 ### Operate
 

@@ -75,6 +75,7 @@ OPS_DIRS = [
     "docs/incidents",
     "docs/product-specs",
     "docs/references",
+    "ops/agent-runtime",
 ]
 
 
@@ -92,6 +93,9 @@ class HarnessContext:
     include_ops: bool
     include_autonomy: bool
     emit_adapters: str
+    automation_provider: str
+    automation_runtime: str
+    emit_automation_adapters: str
     required_commands: list[dict[str, str]]
 
     @property
@@ -116,6 +120,35 @@ class HarnessContext:
         if self.include_autonomy:
             surfaces.append("autonomy")
         return surfaces
+
+    @property
+    def automation_enabled(self) -> bool:
+        return self.include_autonomy and self.automation_provider != "none"
+
+    @property
+    def automation_adapter_files(self) -> list[str]:
+        if not self.automation_enabled or self.emit_automation_adapters == "none":
+            return []
+        files = [
+            "docs/generated/autonomy-config.json",
+        ]
+        if self.automation_runtime in {"ci-worker", "both"}:
+            files.extend(
+                [
+                    ".github/workflows/agent-loop.yml",
+                    ".github/codex/prompts/agent-loop.md",
+                    "ops/agent-runtime/queue_worker.py",
+                    "ops/agent-runtime/monitor_and_maybe_rollback.py",
+                ]
+            )
+        if self.automation_runtime in {"app-server", "both"}:
+            files.extend(
+                [
+                    "ops/agent-runtime/app_server_bridge.py",
+                    "ops/agent-runtime/app_server_schema.json",
+                ]
+            )
+        return files
 
 
 def parse_args() -> argparse.Namespace:
@@ -159,6 +192,24 @@ def parse_args() -> argparse.Namespace:
         choices=["auto", "none", "all"],
         default="auto",
         help="Emit editor/agent adapter files into the target repo.",
+    )
+    parser.add_argument(
+        "--automation-provider",
+        choices=["codex", "none"],
+        default="codex",
+        help="Automation adapter provider for unattended runtime scaffolding.",
+    )
+    parser.add_argument(
+        "--automation-runtime",
+        choices=["ci-worker", "app-server", "both"],
+        default="both",
+        help="Automation runtime surface to generate when autonomy is enabled.",
+    )
+    parser.add_argument(
+        "--emit-automation-adapters",
+        choices=["auto", "none", "all"],
+        default="auto",
+        help="Emit runnable automation adapter files when autonomy is enabled.",
     )
     parser.add_argument(
         "--force",
@@ -248,8 +299,35 @@ def default_required_commands(include_autonomy: bool) -> list[dict[str, str]]:
     return commands
 
 
+def normalize_automation_settings(args: argparse.Namespace, include_autonomy: bool) -> tuple[str, str, str]:
+    if not include_autonomy:
+        return "none", args.automation_runtime, "none"
+    provider = args.automation_provider
+    runtime = args.automation_runtime
+    emit = args.emit_automation_adapters if provider != "none" else "none"
+    return provider, runtime, emit
+
+
+def finalize_required_commands(include_autonomy: bool, automation_enabled: bool) -> list[dict[str, str]]:
+    commands = default_required_commands(include_autonomy)
+    if not automation_enabled:
+        return commands
+    updated: list[dict[str, str]] = []
+    for item in commands:
+        item = dict(item)
+        if item["name"] == "autonomy-loop":
+            item["command"] = "python3 ops/agent-runtime/queue_worker.py --task-file docs/generated/autonomy-task.json"
+            item["doc"] = "docs/generated/autonomy-config.json"
+        updated.append(item)
+    return updated
+
+
 def build_context(args: argparse.Namespace, root: Path) -> HarnessContext:
     include_frontend, include_backend, include_ops, include_autonomy = select_surfaces(args, root)
+    automation_provider, automation_runtime, emit_automation_adapters = normalize_automation_settings(
+        args, include_autonomy
+    )
+    automation_enabled = include_autonomy and automation_provider != "none"
     return HarnessContext(
         project_name=args.project_name,
         project_description=args.project_description,
@@ -263,7 +341,10 @@ def build_context(args: argparse.Namespace, root: Path) -> HarnessContext:
         include_ops=include_ops,
         include_autonomy=include_autonomy,
         emit_adapters=args.emit_adapters,
-        required_commands=default_required_commands(include_autonomy),
+        automation_provider=automation_provider,
+        automation_runtime=automation_runtime,
+        emit_automation_adapters=emit_automation_adapters,
+        required_commands=finalize_required_commands(include_autonomy, automation_enabled),
     )
 
 
@@ -292,8 +373,11 @@ def templates(ctx: HarnessContext) -> dict[str, str]:
         files["docs/incidents/incident-template.md"] = incident_template_md(ctx)
         files["docs/design-docs/core-beliefs.md"] = core_beliefs_md(ctx)
         files["docs/adr/0001-agent-harness-constitution.md"] = adr_md(ctx)
+    if ctx.automation_enabled:
+        files["docs/generated/autonomy-config.json"] = autonomy_config_json(ctx)
 
     files.update(adapter_templates(ctx))
+    files.update(automation_adapter_templates(ctx))
     return files
 
 
@@ -1028,6 +1112,416 @@ def adr_md(ctx: HarnessContext) -> str:
     )
 
 
+def autonomy_config_json(ctx: HarnessContext) -> str:
+    config = {
+        "version": 1,
+        "provider": ctx.automation_provider,
+        "runtime": ctx.automation_runtime,
+        "task_sources": ["schedule", "repo_dispatch", "queue", "thread"],
+        "state": {
+            "checkpoint_path": "docs/generated/autonomy-state.json",
+            "thread_id_path": "docs/generated/autonomy-thread.json",
+            "run_log_path": "docs/validation/autonomy-run-log.jsonl",
+        },
+        "commands": {
+            "install": "{{INSTALL_COMMAND}}",
+            "validation": "{{FULL_VALIDATION_COMMAND}}",
+            "deploy": "{{DEPLOY_COMMAND}}",
+            "deploy_verify": "{{DEPLOY_VERIFY_COMMAND}}",
+            "rollback": "{{ROLLBACK_COMMAND}}",
+            "monitor": "{{MONITOR_COMMAND}}",
+            "autonomy_loop": "python3 ops/agent-runtime/queue_worker.py --task-file docs/generated/autonomy-task.json",
+            "executor": "{{AUTOMATION_EXECUTOR_COMMAND}}",
+            "app_server_start": "{{APP_SERVER_START_COMMAND}}",
+            "app_server_read": "{{APP_SERVER_READ_COMMAND}}",
+            "app_server_inject": "{{APP_SERVER_INJECT_COMMAND}}",
+        },
+        "approval": {
+            "policy": "{{AUTONOMY_APPROVAL_POLICY}}",
+            "allowed_actions": "{{AUTONOMY_ALLOWED_ACTIONS}}",
+            "approval_required_actions": "{{AUTONOMY_APPROVAL_REQUIRED_ACTIONS}}",
+            "escalation_path": "{{AUTONOMY_ESCALATION_PATH}}",
+        },
+        "rollback_policy": {
+            "on_verify_failure": True,
+            "on_monitor_failure": True,
+            "max_attempts": 1,
+            "command": "{{ROLLBACK_COMMAND}}",
+        },
+        "monitor_policy": {
+            "command": "{{MONITOR_COMMAND}}",
+            "failure_signal": "nonzero_exit",
+        },
+        "limits": {
+            "concurrency": 1,
+            "max_retries": 2,
+            "timeout_minutes": 30,
+            "max_turns": 12,
+        },
+        "secrets": ["OPENAI_API_KEY", "CODEX_HOME"],
+    }
+    return json.dumps(config, indent=2, ensure_ascii=False) + "\n"
+
+
+def automation_adapter_templates(ctx: HarnessContext) -> dict[str, str]:
+    if not ctx.automation_enabled or ctx.emit_automation_adapters == "none":
+        return {}
+
+    files: dict[str, str] = {}
+    if ctx.automation_runtime in {"ci-worker", "both"}:
+        files[".github/workflows/agent-loop.yml"] = agent_loop_workflow_yml(ctx)
+        files[".github/codex/prompts/agent-loop.md"] = agent_loop_prompt_md(ctx)
+        files["ops/agent-runtime/queue_worker.py"] = queue_worker_py()
+        files["ops/agent-runtime/monitor_and_maybe_rollback.py"] = monitor_and_maybe_rollback_py()
+    if ctx.automation_runtime in {"app-server", "both"}:
+        files["ops/agent-runtime/app_server_bridge.py"] = app_server_bridge_py()
+        files["ops/agent-runtime/app_server_schema.json"] = app_server_schema_json()
+    return files
+
+
+def agent_loop_workflow_yml(ctx: HarnessContext) -> str:
+    use_action = ctx.automation_provider == "codex"
+    codex_step = (
+        "      - name: Run Codex action\n"
+        "        uses: openai/codex-action@v1\n"
+        "        with:\n"
+        "          prompt-file: .github/codex/prompts/agent-loop.md\n"
+        "          output-file: docs/generated/codex-action-output.json\n"
+        if use_action
+        else
+        "      - name: Run Codex CLI\n"
+        "        run: |\n"
+        "          codex exec --json \"$(cat .github/codex/prompts/agent-loop.md)\" > docs/generated/codex-action-output.jsonl\n"
+    )
+    return "\n".join(
+        [
+            "name: agent-loop",
+            "",
+            "on:",
+            "  workflow_dispatch:",
+            "  schedule:",
+            "    - cron: '{{AUTOMATION_SCHEDULE}}'",
+            "  repository_dispatch:",
+            "    types: [agent-loop]",
+            "",
+            "concurrency:",
+            "  group: agent-loop-${{ github.ref }}",
+            "  cancel-in-progress: false",
+            "",
+            "jobs:",
+            "  unattended-loop:",
+            "    runs-on: ubuntu-latest",
+            "    timeout-minutes: 30",
+            "    env:",
+            "      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}",
+            "      CODEX_HOME: ${{ secrets.CODEX_HOME }}",
+            "    steps:",
+            "      - uses: actions/checkout@v4",
+            "      - uses: actions/setup-python@v5",
+            "        with:",
+            "          python-version: '3.11'",
+            "      - name: Prepare task payload",
+            "        run: |",
+            "          mkdir -p docs/generated docs/validation",
+            "          printf '{\"task_id\":\"github-actions-loop\",\"source\":\"github-actions\",\"objective\":\"{{AUTONOMY_OBJECTIVE}}\"}\\n' > docs/generated/autonomy-task.json",
+            codex_step.rstrip(),
+            "      - name: Queue worker checkpoint",
+            "        run: |",
+            "          python3 ops/agent-runtime/queue_worker.py --task-file docs/generated/autonomy-task.json",
+            "      - name: Monitor and rollback fixture",
+            "        if: always()",
+            "        run: |",
+            "          python3 ops/agent-runtime/monitor_and_maybe_rollback.py --reason github-actions",
+            "      - name: Upload artifacts",
+            "        if: always()",
+            "        uses: actions/upload-artifact@v4",
+            "        with:",
+            "          name: agent-loop-artifacts",
+            "          path: |",
+            "            docs/generated/",
+            "            docs/validation/",
+        ]
+    ) + "\n"
+
+
+def agent_loop_prompt_md(ctx: HarnessContext) -> str:
+    return "\n".join(
+        [
+            f"# {ctx.project_name} Agent Loop",
+            "",
+            "Use the repository harness as the source of truth.",
+            "Read `AGENTS.md`, `PLANS.md`, `QUALITY_SCORE.md`, `RELIABILITY.md`, and `AUTONOMY.md` first.",
+            "",
+            "Goal:",
+            "- `{{AUTONOMY_OBJECTIVE}}`",
+            "",
+            "Required behavior:",
+            "- Continue or create an exec-plan for non-trivial work.",
+            "- Run deterministic validation before reporting completion.",
+            "- Leave machine-readable artifacts under `docs/generated/` and `docs/validation/`.",
+            "- Stop and record escalation if approval or rollback gates are hit.",
+        ]
+    ) + "\n"
+
+
+def queue_worker_py() -> str:
+    return """#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run a Codex-first autonomy queue task.")
+    parser.add_argument("--config", default="docs/generated/autonomy-config.json")
+    parser.add_argument("--task-file")
+    parser.add_argument("--task-json")
+    return parser.parse_args()
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_task(args: argparse.Namespace) -> dict:
+    if args.task_json:
+        return json.loads(args.task_json)
+    if args.task_file:
+        return read_json(Path(args.task_file))
+    if not sys.stdin.isatty():
+        payload = sys.stdin.read().strip()
+        if payload:
+            return json.loads(payload)
+    env_payload = os.environ.get("AUTONOMY_TASK_JSON", "").strip()
+    if env_payload:
+        return json.loads(env_payload)
+    return {"task_id": "default-task", "source": "unknown", "objective": "unspecified"}
+
+
+def append_jsonl(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\\n")
+
+
+def main() -> None:
+    args = parse_args()
+    config_path = Path(args.config)
+    root = config_path.resolve().parents[2]
+    config = read_json(config_path)
+    task = load_task(args)
+    state = config["state"]
+    command = task.get("command") or config["commands"]["executor"]
+    started_at = datetime.now(timezone.utc).isoformat()
+    result = subprocess.run(
+        ["zsh", "-lc", command],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=os.environ.copy(),
+    )
+    checkpoint_path = root / state["checkpoint_path"]
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint = {
+        "task": task,
+        "executor_command": command,
+        "started_at": started_at,
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+    checkpoint_path.write_text(json.dumps(checkpoint, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    append_jsonl(root / state["run_log_path"], checkpoint)
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+
+
+if __name__ == "__main__":
+    main()
+"""
+
+
+def monitor_and_maybe_rollback_py() -> str:
+    return """#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run deploy verification, monitor, and rollback if needed.")
+    parser.add_argument("--config", default="docs/generated/autonomy-config.json")
+    parser.add_argument("--reason", default="manual")
+    return parser.parse_args()
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def run_command(root: Path, command: str) -> dict:
+    result = subprocess.run(
+        ["zsh", "-lc", command],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=os.environ.copy(),
+    )
+    return {
+        "command": command,
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+
+
+def main() -> None:
+    args = parse_args()
+    config_path = Path(args.config)
+    root = config_path.resolve().parents[2]
+    config = read_json(config_path)
+    commands = config["commands"]
+    verify = run_command(root, commands["deploy_verify"])
+    monitor = run_command(root, commands["monitor"])
+    rolled_back = False
+    rollback_result = None
+    if verify["returncode"] != 0 or monitor["returncode"] != 0:
+        rolled_back = bool(config["rollback_policy"].get("on_verify_failure", True) or config["rollback_policy"].get("on_monitor_failure", True))
+        if rolled_back:
+            rollback_result = run_command(root, commands["rollback"])
+    outcome = {
+        "reason": args.reason,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "verify": verify,
+        "monitor": monitor,
+        "rolled_back": rolled_back,
+        "rollback": rollback_result,
+    }
+    outcome_path = root / "docs/generated/monitor-outcome.json"
+    outcome_path.parent.mkdir(parents=True, exist_ok=True)
+    outcome_path.write_text(json.dumps(outcome, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    if rollback_result and rollback_result["returncode"] != 0:
+        raise SystemExit(2)
+    if verify["returncode"] != 0 or monitor["returncode"] != 0:
+        raise SystemExit(0 if rolled_back else 1)
+
+
+if __name__ == "__main__":
+    main()
+"""
+
+
+def app_server_bridge_py() -> str:
+    return """#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Thin bridge for Codex app-server style thread lifecycle.")
+    parser.add_argument("mode", choices=["start", "resume", "read", "inject"])
+    parser.add_argument("--config", default="docs/generated/autonomy-config.json")
+    parser.add_argument("--items-file")
+    return parser.parse_args()
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def run_command(root: Path, command: str, extra_env: dict[str, str] | None = None) -> dict:
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
+    result = subprocess.run(
+        ["zsh", "-lc", command],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+    payload = {"returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+    if result.stdout.strip():
+        try:
+            payload["json"] = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            pass
+    return payload
+
+
+def main() -> None:
+    args = parse_args()
+    config_path = Path(args.config)
+    root = config_path.resolve().parents[2]
+    config = read_json(config_path)
+    commands = config["commands"]
+    state = config["state"]
+    thread_path = root / state["thread_id_path"]
+    thread_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path = root / "docs/generated/app-server-last-turn.json"
+    items_file = args.items_file or ""
+
+    if args.mode == "start":
+        result = run_command(root, commands["app_server_start"], {"CODEX_THREAD_REQUEST_FILE": items_file})
+        thread_id = result.get("json", {}).get("thread_id", "thread-demo")
+        thread_path.write_text(json.dumps({"thread_id": thread_id}, indent=2) + "\\n", encoding="utf-8")
+        metadata_path.write_text(json.dumps({"mode": "start", "result": result, "timestamp": datetime.now(timezone.utc).isoformat()}, indent=2) + "\\n", encoding="utf-8")
+        raise SystemExit(result["returncode"])
+
+    if not thread_path.exists():
+        raise SystemExit("missing thread state; run start first")
+
+    thread_id = read_json(thread_path)["thread_id"]
+    env = {"CODEX_THREAD_ID": thread_id, "CODEX_THREAD_REQUEST_FILE": items_file}
+    command_name = {
+        "resume": "app_server_read",
+        "read": "app_server_read",
+        "inject": "app_server_inject",
+    }[args.mode]
+    result = run_command(root, commands[command_name], env)
+    metadata_path.write_text(json.dumps({"mode": args.mode, "thread_id": thread_id, "result": result, "timestamp": datetime.now(timezone.utc).isoformat()}, indent=2) + "\\n", encoding="utf-8")
+    raise SystemExit(result["returncode"])
+
+
+if __name__ == "__main__":
+    main()
+"""
+
+
+def app_server_schema_json() -> str:
+    schema = {
+        "version": 1,
+        "jsonrpc": "2.0",
+        "methods": {
+            "thread/start": {"request": {"items_file": "string"}, "response": {"thread_id": "string"}},
+            "thread/read": {"request": {"thread_id": "string"}, "response": {"messages": "array"}},
+            "thread/inject_items": {"request": {"thread_id": "string", "items_file": "string"}, "response": {"accepted": "boolean"}},
+        },
+    }
+    return json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
+
+
 ROOT_TEMPLATE_BUILDERS = {
     "AGENTS.md": agents_md,
     "ARCHITECTURE.md": architecture_md,
@@ -1196,6 +1690,25 @@ def write_manifest(
             "state_store": "{{AUTONOMY_STATE_STORE}}" if ctx.include_autonomy else "",
             "approval_policy": "{{AUTONOMY_APPROVAL_POLICY}}" if ctx.include_autonomy else "",
             "escalation_path": "{{AUTONOMY_ESCALATION_PATH}}" if ctx.include_autonomy else "",
+        },
+        "automation": {
+            "enabled": ctx.automation_enabled,
+            "provider": ctx.automation_provider,
+            "runtime": ctx.automation_runtime if ctx.automation_enabled else "none",
+            "adapter_files": ctx.automation_adapter_files,
+            "trigger_modes": ["schedule", "repo_dispatch", "queue", "thread"] if ctx.automation_enabled else [],
+            "checkpoint_store": "docs/generated/autonomy-state.json" if ctx.automation_enabled else "",
+            "approval_policy": "{{AUTONOMY_APPROVAL_POLICY}}" if ctx.automation_enabled else "",
+            "secret_refs": ["OPENAI_API_KEY", "CODEX_HOME"] if ctx.automation_enabled else [],
+            "command_map": {
+                "deploy": "{{DEPLOY_COMMAND}}" if ctx.automation_enabled else "",
+                "verify": "{{DEPLOY_VERIFY_COMMAND}}" if ctx.automation_enabled else "",
+                "rollback": "{{ROLLBACK_COMMAND}}" if ctx.automation_enabled else "",
+                "monitor": "{{MONITOR_COMMAND}}" if ctx.automation_enabled else "",
+                "autonomy_loop": "python3 ops/agent-runtime/queue_worker.py --task-file docs/generated/autonomy-task.json"
+                if ctx.automation_enabled
+                else "",
+            },
         },
         "agents_map_max_lines": 120,
         "required_commands": ctx.required_commands,

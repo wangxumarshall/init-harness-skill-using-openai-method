@@ -41,7 +41,7 @@ CORE_DIRS = [
 ]
 OPS_DIRS = ["docs/adr", "docs/incidents"]
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-PLACEHOLDER_RE = re.compile(r"\{\{[^}]+\}\}")
+PLACEHOLDER_RE = re.compile(r"\{\{[A-Z0-9_./-]+\}\}")
 COMMAND_RE = re.compile(r"`([^`\n]+)`")
 
 
@@ -136,6 +136,7 @@ def load_manifest(root: Path) -> dict:
 def expected_files(manifest: dict) -> tuple[list[str], list[str]]:
     profile = manifest.get("profile", "standard")
     enabled = set(manifest.get("enabled_surfaces", []))
+    automation = manifest.get("automation") or {}
     required = ["AGENTS.md", "PLANS.md", "QUALITY_SCORE.md", "RELIABILITY.md", "docs/generated/harness-manifest.json"]
     if profile in {"standard", "full"}:
         required.extend(["ARCHITECTURE.md", "DELIVERY.md", "DESIGN.md", "PRODUCT_SENSE.md", "SECURITY.md"])
@@ -147,10 +148,13 @@ def expected_files(manifest: dict) -> tuple[list[str], list[str]]:
         required.extend(
             [
                 "AUTONOMY.md",
+                "docs/generated/autonomy-config.json",
                 "docs/runbooks/autonomous-operations.md",
                 "docs/validation/autonomy-drill-template.md",
             ]
         )
+    if automation.get("enabled"):
+        required.extend([str(path) for path in automation.get("adapter_files") or []])
     if "ops" in enabled:
         required.extend(
             [
@@ -183,6 +187,7 @@ def check_manifest(root: Path, manifest: dict, report: AuditReport) -> None:
     for key in (
         "profile",
         "enabled_surfaces",
+        "automation",
         "agents_map_max_lines",
         "required_commands",
         "doc_gardening_required",
@@ -199,6 +204,12 @@ def check_manifest(root: Path, manifest: dict, report: AuditReport) -> None:
             rel(root, manifest_path),
             "trajectory_model must be 'exec-plan-indexed'",
         )
+
+    automation = manifest.get("automation") or {}
+    if automation.get("enabled"):
+        for key in ("provider", "runtime", "adapter_files", "secret_refs", "command_map"):
+            if key not in automation:
+                report.add("structure_failures", "fail", rel(root, manifest_path), f"Automation manifest is missing {key!r}")
 
 
 def check_required_paths(root: Path, manifest: dict, report: AuditReport) -> None:
@@ -253,7 +264,7 @@ def check_placeholders(root: Path, manifest: dict, report: AuditReport) -> None:
         path = root / rel_path
         if not path.exists():
             continue
-        if path.suffix not in {".md", ".json"}:
+        if path.suffix not in {".md", ".json", ".yml", ".py"}:
             continue
         matches = PLACEHOLDER_RE.findall(read(path))
         if matches:
@@ -263,6 +274,47 @@ def check_placeholders(root: Path, manifest: dict, report: AuditReport) -> None:
                 rel_path,
                 f"Unresolved placeholders remain: {', '.join(sorted(set(matches))[:5])}",
             )
+
+
+def check_automation_coherence(root: Path, manifest: dict, report: AuditReport) -> None:
+    automation = manifest.get("automation") or {}
+    if not automation.get("enabled"):
+        return
+
+    config_path = root / "docs/generated/autonomy-config.json"
+    if not config_path.exists():
+        return
+    try:
+        config = json.loads(read(config_path))
+    except json.JSONDecodeError:
+        report.add("workflow_failures", "fail", rel(root, config_path), "Autonomy config is invalid JSON")
+        return
+
+    if config.get("provider") != automation.get("provider"):
+        report.add("workflow_failures", "fail", rel(root, config_path), "Autonomy config provider does not match manifest")
+    if config.get("runtime") != automation.get("runtime"):
+        report.add("workflow_failures", "fail", rel(root, config_path), "Autonomy config runtime does not match manifest")
+    if config.get("secrets") != automation.get("secret_refs"):
+        report.add("workflow_failures", "fail", rel(root, config_path), "Autonomy config secrets do not match manifest secret_refs")
+
+    runtime = automation.get("runtime")
+    declared = set(automation.get("adapter_files") or [])
+    if runtime in {"ci-worker", "both"}:
+        expected = {
+            ".github/workflows/agent-loop.yml",
+            ".github/codex/prompts/agent-loop.md",
+            "ops/agent-runtime/queue_worker.py",
+            "ops/agent-runtime/monitor_and_maybe_rollback.py",
+        }
+        for item in sorted(expected - declared):
+            report.add("workflow_failures", "fail", "docs/generated/harness-manifest.json", f"runtime {runtime!r} requires adapter {item}")
+    if runtime in {"app-server", "both"}:
+        expected = {
+            "ops/agent-runtime/app_server_bridge.py",
+            "ops/agent-runtime/app_server_schema.json",
+        }
+        for item in sorted(expected - declared):
+            report.add("workflow_failures", "fail", "docs/generated/harness-manifest.json", f"runtime {runtime!r} requires adapter {item}")
 
 
 def runnable(command: str, root: Path) -> bool:
@@ -403,6 +455,7 @@ def main() -> None:
         check_agents_map(root, manifest, report, workflow=True)
         check_markdown_links(root, markdown_paths, report, "workflow_failures")
         check_placeholders(root, manifest, report)
+        check_automation_coherence(root, manifest, report)
         check_required_commands(root, manifest, report)
         check_doc_gardening(root, manifest, report)
         if os.environ.get("HARNESS_AUDIT_NESTED") != "1":

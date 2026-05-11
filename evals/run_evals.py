@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -32,15 +33,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
+def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    merged = os.environ.copy()
+    if env:
+        merged.update(env)
+    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False, env=merged)
 
 
-def direct_trace(command: list[str], cwd: Path) -> dict:
-    result = run(command, cwd)
+def direct_trace(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> dict:
+    result = run(command, cwd, env=env)
     return {
         "command": command,
         "cwd": str(cwd),
+        "env_keys": sorted((env or {}).keys()),
         "returncode": result.returncode,
         "stdout": result.stdout,
         "stderr": result.stderr,
@@ -88,7 +93,7 @@ def prepare_repo(kind: str) -> tuple[Path, Path]:
 
 def replace_in_files(repo: Path, replacements: dict[str, str]) -> None:
     for path in repo.rglob("*"):
-        if not path.is_file() or path.suffix not in {".md", ".json"}:
+        if not path.is_file() or path.suffix not in {".md", ".json", ".yml", ".py"}:
             continue
         text = path.read_text(encoding="utf-8")
         updated = text
@@ -98,16 +103,45 @@ def replace_in_files(repo: Path, replacements: dict[str, str]) -> None:
             path.write_text(updated, encoding="utf-8")
 
 
-def wire_autonomy_fixture(repo: Path) -> None:
+def wire_autonomy_fixture(
+    repo: Path,
+    *,
+    monitor_should_fail: bool = False,
+    include_app_server: bool = True,
+    missing_secret_ref: bool = False,
+) -> dict[str, str]:
     ok = "python3 -c 'raise SystemExit(0)'"
+    fail = "python3 -c 'raise SystemExit(1)'"
+    fixture_dir = repo / "ops/agent-runtime/fixture_commands"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    (fixture_dir / "executor.py").write_text(
+        "import json\nprint(json.dumps({'ok': True, 'source': 'executor'}))\n",
+        encoding="utf-8",
+    )
+    (fixture_dir / "app_server_start.py").write_text(
+        "import json\nprint(json.dumps({'thread_id': 'thread-eval-1'}))\n",
+        encoding="utf-8",
+    )
+    (fixture_dir / "app_server_read.py").write_text(
+        "import json, os\nprint(json.dumps({'thread_id': os.environ.get('CODEX_THREAD_ID', ''), 'messages': []}))\n",
+        encoding="utf-8",
+    )
+    (fixture_dir / "app_server_inject.py").write_text(
+        "import json\nprint(json.dumps({'accepted': True}))\n",
+        encoding="utf-8",
+    )
+    executor = "python3 ops/agent-runtime/fixture_commands/executor.py"
+    app_start = "python3 ops/agent-runtime/fixture_commands/app_server_start.py"
+    app_read = "python3 ops/agent-runtime/fixture_commands/app_server_read.py"
+    app_inject = "python3 ops/agent-runtime/fixture_commands/app_server_inject.py"
     replacements = {
         "{{INSTALL_COMMAND}}": ok,
         "{{FULL_VALIDATION_COMMAND}}": ok,
         "{{DEPLOY_COMMAND}}": ok,
         "{{DEPLOY_VERIFY_COMMAND}}": ok,
         "{{ROLLBACK_COMMAND}}": ok,
-        "{{MONITOR_COMMAND}}": ok,
-        "{{AUTONOMY_LOOP_COMMAND}}": ok,
+        "{{MONITOR_COMMAND}}": fail if monitor_should_fail else ok,
+        "{{AUTONOMY_LOOP_COMMAND}}": "python3 ops/agent-runtime/queue_worker.py --task-file docs/generated/autonomy-task.json",
         "{{AUTONOMY_OBJECTIVE}}": "Keep the demo service healthy and ship validated changes.",
         "{{AUTONOMY_TRIGGER_MODE}}": "scheduled",
         "{{AUTONOMY_STATE_STORE}}": "docs/generated/autonomy-state.json",
@@ -120,6 +154,11 @@ def wire_autonomy_fixture(repo: Path) -> None:
         "{{AUTONOMY_RETRY_POLICY}}": "retry deploy twice, then escalate",
         "{{AUTONOMY_ESCALATION_TRIGGER}}": "two consecutive failed deploy verifications",
         "{{AUTONOMY_SHUTDOWN_COMMAND}}": ok,
+        "{{AUTOMATION_EXECUTOR_COMMAND}}": executor,
+        "{{APP_SERVER_START_COMMAND}}": app_start if include_app_server else ok,
+        "{{APP_SERVER_READ_COMMAND}}": app_read if include_app_server else ok,
+        "{{APP_SERVER_INJECT_COMMAND}}": app_inject if include_app_server else ok,
+        "{{AUTOMATION_SCHEDULE}}": "*/30 * * * *",
         "{{SPEC_PATH_OR_REQUEST_LINK}}": "docs/product-specs/demo-spec.md",
         "{{DEPENDENCIES_COMMAND}}": ok,
         "{{DEV_COMMAND}}": ok,
@@ -145,6 +184,14 @@ def wire_autonomy_fixture(repo: Path) -> None:
     product_specs = repo / "docs/product-specs"
     product_specs.mkdir(parents=True, exist_ok=True)
     (product_specs / "demo-spec.md").write_text("# Demo Spec\n\nAutonomy fixture.\n", encoding="utf-8")
+    (repo / "docs/generated/autonomy-task.json").write_text(
+        json.dumps({"task_id": "demo-task", "source": "fixture", "objective": "run worker"}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    env = {"OPENAI_API_KEY": "test-openai-key"}
+    if not missing_secret_ref:
+        env["CODEX_HOME"] = str(repo / ".codex-home")
+    return env
 
 
 def run_scenario(row: dict[str, str], engine: str) -> dict:
@@ -153,8 +200,10 @@ def run_scenario(row: dict[str, str], engine: str) -> dict:
     profile = row.get("profile") or "standard"
     primary_agent = row.get("primary_agent") or "Codex"
     include_autonomy = row.get("include_autonomy") == "true"
+    automation_runtime = row.get("automation_runtime") or "both"
     traces: list[dict] = []
     present_files: list[str] = []
+    captured_artifacts: dict[str, object] = {}
 
     try:
         if row["expect_trigger"] == "true":
@@ -201,15 +250,60 @@ def run_scenario(row: dict[str, str], engine: str) -> dict:
                             primary_agent,
                             "--profile",
                             profile,
+                            "--automation-runtime",
+                            automation_runtime,
                         ]
                         + (["--include-autonomy"] if include_autonomy else []),
                         ROOT,
                     )
                 )
                 traces.append(direct_trace(["python3", str(AUDIT), "--target", str(repo), "--mode", "structure", "--json"], ROOT))
-                if row.get("expect_autonomy_ready") == "true":
-                    wire_autonomy_fixture(repo)
-                    traces.append(direct_trace(["python3", str(AUTONOMY_CHECK), "--target", str(repo)], ROOT))
+                fixture_env: dict[str, str] | None = None
+                needs_fixture = any(
+                    row.get(key) == "true"
+                    for key in ("expect_autonomy_ready", "run_autonomy_check", "run_monitor_fixture", "run_app_server_fixture")
+                )
+                if needs_fixture:
+                    fixture_env = wire_autonomy_fixture(
+                        repo,
+                        monitor_should_fail=row.get("monitor_should_fail") == "true",
+                        include_app_server=automation_runtime in {"app-server", "both"},
+                        missing_secret_ref=row.get("missing_secret_ref") == "true",
+                    )
+                if row.get("expect_autonomy_ready") == "true" or row.get("run_autonomy_check") == "true":
+                    traces.append(direct_trace(["python3", str(AUTONOMY_CHECK), "--target", str(repo)], ROOT, env=fixture_env))
+                if row.get("run_monitor_fixture") == "true":
+                    traces.append(
+                        direct_trace(
+                            ["python3", "ops/agent-runtime/monitor_and_maybe_rollback.py", "--reason", scenario_id],
+                            repo,
+                            env=fixture_env,
+                        )
+                    )
+                    monitor_outcome = repo / "docs/generated/monitor-outcome.json"
+                    if monitor_outcome.exists():
+                        captured_artifacts["monitor_outcome"] = json.loads(monitor_outcome.read_text(encoding="utf-8"))
+                if row.get("run_app_server_fixture") == "true":
+                    traces.append(
+                        direct_trace(
+                            ["python3", "ops/agent-runtime/app_server_bridge.py", "start"],
+                            repo,
+                            env=fixture_env,
+                        )
+                    )
+                    traces.append(
+                        direct_trace(
+                            ["python3", "ops/agent-runtime/app_server_bridge.py", "resume"],
+                            repo,
+                            env=fixture_env,
+                        )
+                    )
+                    thread_state = repo / "docs/generated/autonomy-thread.json"
+                    last_turn = repo / "docs/generated/app-server-last-turn.json"
+                    if thread_state.exists():
+                        captured_artifacts["thread_state"] = json.loads(thread_state.read_text(encoding="utf-8"))
+                    if last_turn.exists():
+                        captured_artifacts["app_server_last_turn"] = json.loads(last_turn.read_text(encoding="utf-8"))
                 present_files = sorted(
                     str(path.relative_to(repo))
                     for path in repo.rglob("*")
@@ -226,9 +320,11 @@ def run_scenario(row: dict[str, str], engine: str) -> dict:
             "profile": row.get("profile") or "",
             "primary_agent": primary_agent,
             "include_autonomy": include_autonomy,
+            "automation_runtime": automation_runtime,
             "repo": str(repo),
             "present_files": present_files,
             "traces": traces,
+            "captured_artifacts": captured_artifacts,
         }
         write_json(scenario_root(scenario_id) / "summary.json", summary)
         return summary

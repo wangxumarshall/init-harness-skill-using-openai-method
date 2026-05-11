@@ -13,6 +13,23 @@
   "enabled_surfaces": [
     "core"
   ],
+  "automation": {
+    "enabled": false,
+    "provider": "none",
+    "runtime": "none",
+    "adapter_files": [],
+    "trigger_modes": [],
+    "checkpoint_store": "",
+    "approval_policy": "",
+    "secret_refs": [],
+    "command_map": {
+      "deploy": "",
+      "verify": "",
+      "rollback": "",
+      "monitor": "",
+      "autonomy_loop": ""
+    }
+  },
   "agents_map_max_lines": 80,
   "required_commands": [
     {

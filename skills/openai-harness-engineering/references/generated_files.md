@@ -39,6 +39,10 @@ When autonomy is enabled, also adds:
 
 - `docs/runbooks/autonomous-operations.md`
 - `docs/validation/autonomy-drill-template.md`
+- `docs/generated/autonomy-config.json`
+- Codex-first automation adapters for the selected runtime:
+  - `ci-worker`: `.github/workflows/agent-loop.yml`, `.github/codex/prompts/agent-loop.md`, `ops/agent-runtime/queue_worker.py`, `ops/agent-runtime/monitor_and_maybe_rollback.py`
+  - `app-server`: `ops/agent-runtime/app_server_bridge.py`, `ops/agent-runtime/app_server_schema.json`
 
 ### `full`
 
@@ -58,6 +62,7 @@ Creates the full current scaffold surface, including frontend and backend docs r
 - selected `profile`
 - `enabled_surfaces`
 - `autonomy`
+- `automation`
 - `agents_map_max_lines`
 - `required_commands`
 - `doc_gardening_required`

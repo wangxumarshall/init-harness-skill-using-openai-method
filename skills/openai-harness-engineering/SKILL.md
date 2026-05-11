@@ -84,6 +84,9 @@ Useful flags:
 - `--include-ops`
 - `--include-autonomy`
 - `--emit-adapters auto|none|all`
+- `--automation-provider codex|none`
+- `--automation-runtime ci-worker|app-server|both`
+- `--emit-automation-adapters auto|none|all`
 - `--dry-run`
 - `--force`
 
@@ -98,7 +101,7 @@ After generation:
 - keep `AGENTS.md` short and routing-oriented
 - prefer scripts or CI over prose-only requirements
 - mark unresolved enforcement explicitly until it exists
-- when unattended execution is required, wire autonomy commands, escalation policy, and checkpoint storage before calling the repo ready
+- when unattended execution is required, wire autonomy commands, escalation policy, checkpoint storage, secret refs, and automation adapters before calling the repo ready
 
 ### 5. Operate the Harness
 
@@ -149,8 +152,9 @@ python3 skills/openai-harness-engineering/scripts/check_autonomy_readiness.py --
 Check:
 
 - is the autonomy surface enabled
-- are deploy, verify, rollback, monitor, and unattended loop commands real and runnable
+- are deploy, verify, rollback, monitor, unattended loop, and app-server bridge commands real and runnable for the selected runtime
 - are approval policy, state store, and escalation path wired instead of left as placeholders
+- does `docs/generated/autonomy-config.json` agree with the manifest automation section and declared secret refs
 
 ### 7. Run Drift Checks and Evals
 
