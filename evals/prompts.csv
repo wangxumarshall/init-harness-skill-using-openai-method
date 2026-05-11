@@ -1,11 +1,14 @@
-id,kind,prompt,expect_trigger,profile,expected_exit
-explicit-init-minimal,"explicit invocation","Use $openai-harness-engineering to initialize this blank repo with a minimal harness.",true,minimal,0
-implicit-init-standard,"implicit invocation","Initialize this repo with an OpenAI-style harness that supports long-running agent work.",true,standard,0
-negative-control,"negative control","Explain what this repository does in one paragraph.",false,,0
-blank-init-full,"blank repo init","Use $openai-harness-engineering to initialize this blank repo with a full harness.",true,full,0
-existing-repo-preservation,"existing repo preservation","Use $openai-harness-engineering to add a harness while preserving existing docs.",true,standard,0
-minimal-profile,"minimal profile init","Create only the minimal thin harness surface for this repo.",true,minimal,0
-standard-profile,"standard profile init","Create the standard adaptive harness for this repo.",true,standard,0
-audit-only,"audit only","Audit whether this repo is ready for long-running harness work.",true,,1
-operate-plan,"operate workflow","Create a persistent exec-plan for debugging flaky checkout retries.",true,,0
-self-dogfood,"self repo dogfood audit","Audit this skill repository and confirm the thin harness passes.",true,,0
+id,kind,prompt,expect_trigger,profile,expected_exit,primary_agent,include_autonomy,expect_files,expect_autonomy_ready
+explicit-init-minimal,"explicit invocation","Use $openai-harness-engineering to initialize this blank repo with a minimal harness.",true,minimal,0,Codex,,AGENTS.md,
+implicit-init-standard,"implicit invocation","Initialize this repo with an OpenAI-style harness that supports long-running agent work.",true,standard,0,Codex,,"DELIVERY.md,docs/runbooks/deployment.md",
+negative-control,"negative control","Explain what this repository does in one paragraph.",false,,0,,,,
+blank-init-full,"blank repo init","Use $openai-harness-engineering to initialize this blank repo with a full harness.",true,full,0,Codex,,"DELIVERY.md,FRONTEND.md,BACKEND.md",
+existing-repo-preservation,"existing repo preservation","Use $openai-harness-engineering to add a harness while preserving existing docs.",true,standard,0,Codex,,README.md,
+minimal-profile,"minimal profile init","Create only the minimal thin harness surface for this repo.",true,minimal,0,Codex,,AGENTS.md,
+standard-profile,"standard profile init","Create the standard adaptive harness for this repo.",true,standard,0,Codex,,"DELIVERY.md,docs/runbooks/deployment.md",
+claude-adapter-standard,"claude adapter","Initialize this repo for Claude Code with a standard harness.",true,standard,0,"Claude Code",,"CLAUDE.md,DELIVERY.md",
+autonomy-surface-standard,"autonomy surface","Initialize this repo with an autonomy-ready harness for unattended work.",true,standard,0,Codex,true,"AUTONOMY.md,docs/runbooks/autonomous-operations.md,docs/validation/autonomy-drill-template.md",
+autonomy-ready-fixture,"autonomy ready fixture","Create a repo harness that can pass unattended-operation readiness checks.",true,standard,0,Codex,true,"AUTONOMY.md,docs/runbooks/autonomous-operations.md",true
+audit-only,"audit only","Audit whether this repo is ready for long-running harness work.",true,,1,,,,
+operate-plan,"operate workflow","Create a persistent exec-plan for debugging flaky checkout retries.",true,,0,,,,
+self-dogfood,"self repo dogfood audit","Audit this skill repository and confirm the thin harness passes.",true,,0,,,,

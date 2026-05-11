@@ -27,6 +27,7 @@ def read_json(path: Path) -> dict:
 def grade_summary(row: dict[str, str], summary: dict) -> list[str]:
     errors: list[str] = []
     traces = summary.get("traces", [])
+    present_files = set(summary.get("present_files", []))
     expect_trigger = row["expect_trigger"] == "true"
     expected_exit = int(row.get("expected_exit") or 0)
 
@@ -48,6 +49,20 @@ def grade_summary(row: dict[str, str], summary: dict) -> list[str]:
         init_trace = next((trace for trace in traces if "init_harness.py" in " ".join(trace.get("command", []))), None)
         if init_trace and f"--profile {row['profile']}" not in " ".join(init_trace.get("command", [])):
             errors.append(f"expected profile {row['profile']} was not used")
+        if row.get("include_autonomy") == "true" and init_trace and "--include-autonomy" not in " ".join(init_trace.get("command", [])):
+            errors.append("expected --include-autonomy flag was not used")
+
+    expected_files = [item.strip() for item in (row.get("expect_files") or "").split(",") if item.strip()]
+    for path in expected_files:
+        if path not in present_files:
+            errors.append(f"expected generated file missing from summary: {path}")
+
+    if row.get("expect_autonomy_ready") == "true":
+        autonomy_trace = next((trace for trace in traces if "check_autonomy_readiness.py" in " ".join(trace.get("command", []))), None)
+        if not autonomy_trace:
+            errors.append("expected autonomy readiness trace but found none")
+        elif autonomy_trace.get("returncode", 0) != 0:
+            errors.append("autonomy readiness check did not pass")
 
     return errors
 

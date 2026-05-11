@@ -138,17 +138,26 @@ def expected_files(manifest: dict) -> tuple[list[str], list[str]]:
     enabled = set(manifest.get("enabled_surfaces", []))
     required = ["AGENTS.md", "PLANS.md", "QUALITY_SCORE.md", "RELIABILITY.md", "docs/generated/harness-manifest.json"]
     if profile in {"standard", "full"}:
-        required.extend(["ARCHITECTURE.md", "DESIGN.md", "PRODUCT_SENSE.md", "SECURITY.md"])
+        required.extend(["ARCHITECTURE.md", "DELIVERY.md", "DESIGN.md", "PRODUCT_SENSE.md", "SECURITY.md"])
     if "frontend" in enabled:
         required.append("FRONTEND.md")
     if "backend" in enabled:
         required.append("BACKEND.md")
+    if "autonomy" in enabled:
+        required.extend(
+            [
+                "AUTONOMY.md",
+                "docs/runbooks/autonomous-operations.md",
+                "docs/validation/autonomy-drill-template.md",
+            ]
+        )
     if "ops" in enabled:
         required.extend(
             [
                 "docs/adr/0001-agent-harness-constitution.md",
                 "docs/incidents/incident-template.md",
                 "docs/runbooks/runbook-template.md",
+                "docs/runbooks/deployment.md",
                 "docs/validation/validation-log-template.md",
             ]
         )

@@ -41,6 +41,7 @@ PROFILE_ROOT_FILES = {
         "AGENTS.md",
         "ARCHITECTURE.md",
         "DESIGN.md",
+        "DELIVERY.md",
         "PLANS.md",
         "PRODUCT_SENSE.md",
         "QUALITY_SCORE.md",
@@ -51,6 +52,7 @@ PROFILE_ROOT_FILES = {
         "AGENTS.md",
         "ARCHITECTURE.md",
         "DESIGN.md",
+        "DELIVERY.md",
         "FRONTEND.md",
         "BACKEND.md",
         "PLANS.md",
@@ -88,6 +90,7 @@ class HarnessContext:
     include_frontend: bool
     include_backend: bool
     include_ops: bool
+    include_autonomy: bool
     emit_adapters: str
     required_commands: list[dict[str, str]]
 
@@ -110,6 +113,8 @@ class HarnessContext:
             surfaces.append("backend")
         if self.include_ops:
             surfaces.append("ops")
+        if self.include_autonomy:
+            surfaces.append("autonomy")
         return surfaces
 
 
@@ -143,6 +148,11 @@ def parse_args() -> argparse.Namespace:
         "--include-ops",
         action="store_true",
         help="Force ops-oriented docs such as ADRs and incident templates.",
+    )
+    parser.add_argument(
+        "--include-autonomy",
+        action="store_true",
+        help="Add unattended-operation docs, policies, and readiness checks.",
     )
     parser.add_argument(
         "--emit-adapters",
@@ -202,7 +212,7 @@ def detect_surfaces(root: Path) -> tuple[bool, bool]:
     return frontend, backend
 
 
-def select_surfaces(args: argparse.Namespace, root: Path) -> tuple[bool, bool, bool]:
+def select_surfaces(args: argparse.Namespace, root: Path) -> tuple[bool, bool, bool, bool]:
     detected_frontend, detected_backend = detect_surfaces(root)
     include_frontend = args.profile == "full" or args.include_frontend or (
         args.profile == "standard" and detected_frontend
@@ -213,20 +223,33 @@ def select_surfaces(args: argparse.Namespace, root: Path) -> tuple[bool, bool, b
     include_ops = (
         args.profile == "full"
         or args.include_ops
+        or args.include_autonomy
         or args.profile == "standard"
     )
-    return include_frontend, include_backend, include_ops
+    include_autonomy = args.profile == "full" or args.include_autonomy
+    return include_frontend, include_backend, include_ops, include_autonomy
 
 
-def default_required_commands() -> list[dict[str, str]]:
-    return [
+def default_required_commands(include_autonomy: bool) -> list[dict[str, str]]:
+    commands = [
         {"name": "install", "command": "{{INSTALL_COMMAND}}", "doc": "RELIABILITY.md"},
         {"name": "validation", "command": "{{FULL_VALIDATION_COMMAND}}", "doc": "RELIABILITY.md"},
     ]
+    if include_autonomy:
+        commands.extend(
+            [
+                {"name": "deploy", "command": "{{DEPLOY_COMMAND}}", "doc": "DELIVERY.md"},
+                {"name": "deploy-verify", "command": "{{DEPLOY_VERIFY_COMMAND}}", "doc": "DELIVERY.md"},
+                {"name": "rollback", "command": "{{ROLLBACK_COMMAND}}", "doc": "DELIVERY.md"},
+                {"name": "monitor", "command": "{{MONITOR_COMMAND}}", "doc": "AUTONOMY.md"},
+                {"name": "autonomy-loop", "command": "{{AUTONOMY_LOOP_COMMAND}}", "doc": "AUTONOMY.md"},
+            ]
+        )
+    return commands
 
 
 def build_context(args: argparse.Namespace, root: Path) -> HarnessContext:
-    include_frontend, include_backend, include_ops = select_surfaces(args, root)
+    include_frontend, include_backend, include_ops, include_autonomy = select_surfaces(args, root)
     return HarnessContext(
         project_name=args.project_name,
         project_description=args.project_description,
@@ -238,8 +261,9 @@ def build_context(args: argparse.Namespace, root: Path) -> HarnessContext:
         include_frontend=include_frontend,
         include_backend=include_backend,
         include_ops=include_ops,
+        include_autonomy=include_autonomy,
         emit_adapters=args.emit_adapters,
-        required_commands=default_required_commands(),
+        required_commands=default_required_commands(include_autonomy),
     )
 
 
@@ -248,13 +272,21 @@ def templates(ctx: HarnessContext) -> dict[str, str]:
     for rel in PROFILE_ROOT_FILES[ctx.profile]:
         files[rel] = ROOT_TEMPLATE_BUILDERS[rel](ctx)
 
+    if ctx.include_autonomy and "DELIVERY.md" not in files:
+        files["DELIVERY.md"] = delivery_md(ctx)
     if ctx.include_frontend:
         files["FRONTEND.md"] = frontend_md(ctx)
     if ctx.include_backend:
         files["BACKEND.md"] = backend_md(ctx)
+    if ctx.include_autonomy:
+        files["AUTONOMY.md"] = autonomy_md(ctx)
     if ctx.include_ops:
         files["docs/runbooks/local-development.md"] = local_development_md(ctx)
         files["docs/runbooks/debugging.md"] = debugging_md(ctx)
+        files["docs/runbooks/deployment.md"] = deployment_md(ctx)
+        if ctx.include_autonomy:
+            files["docs/runbooks/autonomous-operations.md"] = autonomous_operations_md(ctx)
+            files["docs/validation/autonomy-drill-template.md"] = autonomy_drill_template_md(ctx)
         files["docs/runbooks/runbook-template.md"] = runbook_template_md(ctx)
         files["docs/validation/validation-log-template.md"] = validation_log_template_md(ctx)
         files["docs/incidents/incident-template.md"] = incident_template_md(ctx)
@@ -297,7 +329,9 @@ def agents_md(ctx: HarnessContext) -> str:
                     "- [Reliability & Maintenance](./RELIABILITY.md)",
                 ]
                 + ([ "- [Architecture & Boundaries](./ARCHITECTURE.md)" ] if ctx.profile != "minimal" else [])
+                + ([ "- [Autonomy Policy](./AUTONOMY.md)" ] if ctx.include_autonomy else [])
                 + ([ "- [Design Principles](./DESIGN.md)" ] if ctx.profile != "minimal" else [])
+                + ([ "- [Delivery Lifecycle](./DELIVERY.md)" ] if ctx.profile != "minimal" else [])
                 + ([ "- [Product Sense](./PRODUCT_SENSE.md)" ] if ctx.profile != "minimal" else [])
                 + ([ "- [Security Baseline](./SECURITY.md)" ] if ctx.profile != "minimal" else [])
                 + ([ "- [Frontend Standards](./FRONTEND.md)" ] if ctx.include_frontend else [])
@@ -329,6 +363,68 @@ def agents_md(ctx: HarnessContext) -> str:
                     f"- Primary agent: {ctx.primary_agent}",
                     "- Core domains:",
                     ctx.domain_bullets,
+                ]
+            ),
+        ),
+        (
+            "Engineering Rules",
+            "\n".join(
+                [
+                    "- Inspect the existing code path before adding abstractions.",
+                    "- Match current architecture before inventing a new layer.",
+                    "- Keep edits surgical; do not refactor unrelated code.",
+                    "- Prefer the minimum code that solves the verified problem.",
+                    "- Keep docs, scripts, and tests aligned when workflow or behavior changes.",
+                    "- Add automated tests for new features.",
+                    "- Use structured APIs or parsers when available.",
+                    "- Code comments must be English.",
+                    "- Never hand-edit generated code.",
+                    "- Never add compatibility shims, dual-write logic, fallback paths, or legacy adapters unless explicitly asked.",
+                    "- Prefer deleting obsolete paths over preserving both old and new behavior.",
+                    "- Never introduce ad-hoc `console.*`; use existing logger modules.",
+                    "- Never hardcode secrets, tokens, cookies, database credentials, or provider keys.",
+                    "- Never modify, rotate, or commit production credentials from this repository.",
+                ]
+            ),
+        ),
+        (
+            "Evidence Rules",
+            "\n".join(
+                [
+                    "- Do not guess. Back claims with code, tests, logs, command output, or documented source files.",
+                    "- If evidence is insufficient, say so and continue gathering evidence.",
+                    "- If multiple interpretations exist, state them before choosing.",
+                    "- Surface tradeoffs and push back when the simpler or safer path is clear.",
+                ]
+            ),
+        ),
+        (
+            "Verification",
+            "\n".join(
+                [
+                    "- Follow `QUALITY_SCORE.md` and `RELIABILITY.md` for required verification commands and release gates.",
+                    "- Do not claim completion without recording the exact commands run and their results.",
+                ]
+            ),
+        ),
+        (
+            "Commits and PRs",
+            "\n".join(
+                [
+                    "- Keep commits atomic and grouped by logical intent.",
+                    "- Use Conventional Commits such as `feat(web): ...`, `fix(server): ...`, `refactor(daemon): ...`, `test(e2e): ...`, `docs: ...`.",
+                    "- Never commit code that still fails required lint, typecheck, or tests.",
+                    "- PRs should include a short summary and exact verification commands; include screenshots for UI changes.",
+                ]
+            ),
+        ),
+        (
+            "Responses",
+            "\n".join(
+                [
+                    "- Reply in Chinese.",
+                    "- Be concise.",
+                    "- State result before cause when practical.",
                 ]
             ),
         ),
@@ -392,6 +488,93 @@ def design_md(ctx: HarnessContext) -> str:
                         f"- Primary stack: `{ctx.tech_stack}`",
                         "- Install command: `{{INSTALL_COMMAND}}`",
                         "- Validation command: `{{FULL_VALIDATION_COMMAND}}`",
+                    ]
+                ),
+            ),
+        ],
+    )
+
+
+def delivery_md(ctx: HarnessContext) -> str:
+    return make_doc(
+        "Delivery Lifecycle",
+        [
+            (
+                "Definition Of Done",
+                "\n".join(
+                    [
+                        "1. The active spec or request is linked from an exec-plan or `docs/product-specs/`.",
+                        "2. Implementation lands with the narrowest meaningful code and test changes.",
+                        "3. Deterministic validation passes and the exact commands are recorded.",
+                        "4. Deployment or release procedure is executed or explicitly handed off with a blocker.",
+                        "5. Post-deploy verification and rollback expectations are recorded before closure.",
+                    ]
+                ),
+            ),
+            (
+                "Required Evidence",
+                "\n".join(
+                    [
+                        "- Spec or request path: `{{SPEC_PATH_OR_REQUEST_LINK}}`",
+                        "- Implementation validation: `{{FULL_VALIDATION_COMMAND}}`",
+                        "- Release/deploy command: `{{DEPLOY_COMMAND}}`",
+                        "- Post-deploy verification: `{{DEPLOY_VERIFY_COMMAND}}`",
+                        "- Rollback path: `{{ROLLBACK_COMMAND}}`",
+                    ]
+                ),
+            ),
+            (
+                "Closure Rule",
+                "Do not mark work complete until implementation, tests, verification, and deployment state are all either complete with evidence or explicitly blocked with the owner recorded.",
+            ),
+        ],
+    )
+
+
+def autonomy_md(ctx: HarnessContext) -> str:
+    return make_doc(
+        "Autonomy Policy",
+        [
+            (
+                "Mission Profile",
+                "\n".join(
+                    [
+                        "- Primary objective: `{{AUTONOMY_OBJECTIVE}}`",
+                        "- Trigger mode: `{{AUTONOMY_TRIGGER_MODE}}`",
+                        "- Checkpoint store: `{{AUTONOMY_STATE_STORE}}`",
+                        "- Human escalation path: `{{AUTONOMY_ESCALATION_PATH}}`",
+                    ]
+                ),
+            ),
+            (
+                "Unattended Loop",
+                "\n".join(
+                    [
+                        "1. Load the active spec, backlog, and latest exec-plan.",
+                        "2. Run autonomy loop command: `{{AUTONOMY_LOOP_COMMAND}}`",
+                        "3. Record checkpoints, validation, and incidents before the next cycle.",
+                        "4. Stop or escalate when approval, safety, or rollback gates are hit.",
+                    ]
+                ),
+            ),
+            (
+                "Approval Policy",
+                "\n".join(
+                    [
+                        "- Allowed without human approval: `{{AUTONOMY_ALLOWED_ACTIONS}}`",
+                        "- Requires approval: `{{AUTONOMY_APPROVAL_REQUIRED_ACTIONS}}`",
+                        "- Immediate stop conditions: `{{AUTONOMY_STOP_CONDITIONS}}`",
+                    ]
+                ),
+            ),
+            (
+                "Readiness Commands",
+                "\n".join(
+                    [
+                        "- Monitor: `{{MONITOR_COMMAND}}`",
+                        "- Deploy: `{{DEPLOY_COMMAND}}`",
+                        "- Post-deploy verify: `{{DEPLOY_VERIFY_COMMAND}}`",
+                        "- Rollback: `{{ROLLBACK_COMMAND}}`",
                     ]
                 ),
             ),
@@ -581,6 +764,7 @@ def reliability_md(ctx: HarnessContext) -> str:
                         "- Run a doc drift scan regularly.",
                         "- Clear unresolved placeholders before calling the harness complete.",
                         "- Review stale active plans and either update or close them.",
+                        "- Keep deployment and rollback steps current with real production behavior.",
                     ]
                 ),
             ),
@@ -682,6 +866,81 @@ def debugging_md(ctx: HarnessContext) -> str:
     )
 
 
+def deployment_md(ctx: HarnessContext) -> str:
+    return make_doc(
+        "Deployment Runbook",
+        [
+            (
+                "Release Path",
+                "\n".join(
+                    [
+                        "1. Confirm the active spec, plan, and validation evidence are up to date.",
+                        "2. Run deploy command: `{{DEPLOY_COMMAND}}`",
+                        "3. Capture deploy artifact, environment, and version: `{{DEPLOY_ARTIFACT_NOTE}}`",
+                    ]
+                ),
+            ),
+            (
+                "Verification",
+                "\n".join(
+                    [
+                        "- Post-deploy check: `{{DEPLOY_VERIFY_COMMAND}}`",
+                        "- Expected result: `{{DEPLOY_EXPECTED_RESULT}}`",
+                    ]
+                ),
+            ),
+            (
+                "Rollback",
+                "\n".join(
+                    [
+                        "- Trigger: `{{ROLLBACK_TRIGGER}}`",
+                        "- Command or procedure: `{{ROLLBACK_COMMAND}}`",
+                    ]
+                ),
+            ),
+        ],
+    )
+
+
+def autonomous_operations_md(ctx: HarnessContext) -> str:
+    return make_doc(
+        "Autonomous Operations Runbook",
+        [
+            (
+                "Prerequisites",
+                "\n".join(
+                    [
+                        "- Active spec linked from an exec-plan or `docs/product-specs/`.",
+                        "- Real commands wired for validation, deploy, verify, rollback, and monitor.",
+                        "- Approval and escalation contacts documented in `AUTONOMY.md`.",
+                    ]
+                ),
+            ),
+            (
+                "Loop Procedure",
+                "\n".join(
+                    [
+                        "1. Refresh state from the checkpoint store: `{{AUTONOMY_STATE_SYNC_COMMAND}}`",
+                        "2. Execute unattended loop: `{{AUTONOMY_LOOP_COMMAND}}`",
+                        "3. Run health or monitor checks: `{{MONITOR_COMMAND}}`",
+                        "4. Append outcomes to validation and incident records before the next cycle.",
+                    ]
+                ),
+            ),
+            (
+                "Failure Branches",
+                "\n".join(
+                    [
+                        "- Retry policy: `{{AUTONOMY_RETRY_POLICY}}`",
+                        "- Escalation trigger: `{{AUTONOMY_ESCALATION_TRIGGER}}`",
+                        "- Failsafe shutdown: `{{AUTONOMY_SHUTDOWN_COMMAND}}`",
+                    ]
+                ),
+            ),
+        ],
+    )
+
+
 def validation_log_template_md(ctx: HarnessContext) -> str:
     return make_doc(
         "Validation Log Template",
@@ -695,6 +954,26 @@ def validation_log_template_md(ctx: HarnessContext) -> str:
                         "- Related exec-plan: {{EXEC_PLAN_PATH}}",
                         "- Commands and pass/fail notes",
                         "- Manual checks, artifacts, and residual risk",
+                    ]
+                ),
+            )
+        ],
+    )
+
+
+def autonomy_drill_template_md(ctx: HarnessContext) -> str:
+    return make_doc(
+        "Autonomy Drill Template",
+        [
+            (
+                "Template",
+                "\n".join(
+                    [
+                        "- Date: {{YYYY-MM-DD}}",
+                        "- Objective exercised: {{AUTONOMY_OBJECTIVE}}",
+                        "- Commands run: {{AUTONOMY_LOOP_COMMAND}}, {{MONITOR_COMMAND}}, {{DEPLOY_VERIFY_COMMAND}}",
+                        "- Recovery branch tested: {{ROLLBACK_COMMAND_OR_NONE}}",
+                        "- Result, residual risk, and escalation notes",
                     ]
                 ),
             )
@@ -752,7 +1031,9 @@ def adr_md(ctx: HarnessContext) -> str:
 ROOT_TEMPLATE_BUILDERS = {
     "AGENTS.md": agents_md,
     "ARCHITECTURE.md": architecture_md,
+    "AUTONOMY.md": autonomy_md,
     "DESIGN.md": design_md,
+    "DELIVERY.md": delivery_md,
     "FRONTEND.md": frontend_md,
     "BACKEND.md": backend_md,
     "PLANS.md": plans_md,
@@ -772,7 +1053,7 @@ def adapter_templates(ctx: HarnessContext) -> dict[str, str]:
         targets = {
             ".cursor/rules/harness.mdc",
             ".trae/rules/harness.md",
-            ".claude/commands/harness.md",
+            "CLAUDE.md",
             ".codex/skills/openai-harness-engineering/SKILL.md",
         }
     elif ctx.primary_agent.lower() == "cursor":
@@ -780,7 +1061,7 @@ def adapter_templates(ctx: HarnessContext) -> dict[str, str]:
     elif ctx.primary_agent.lower() == "trae":
         targets.add(".trae/rules/harness.md")
     elif ctx.primary_agent.lower() in {"claude", "claude code"}:
-        targets.add(".claude/commands/harness.md")
+        targets.add("CLAUDE.md")
     elif ctx.primary_agent.lower() == "codex":
         targets.add(".codex/skills/openai-harness-engineering/SKILL.md")
 
@@ -909,6 +1190,13 @@ def write_manifest(
         "generated_on": ctx.generated_on,
         "profile": ctx.profile,
         "enabled_surfaces": ctx.enabled_surfaces,
+        "autonomy": {
+            "enabled": ctx.include_autonomy,
+            "trigger_mode": "{{AUTONOMY_TRIGGER_MODE}}" if ctx.include_autonomy else "",
+            "state_store": "{{AUTONOMY_STATE_STORE}}" if ctx.include_autonomy else "",
+            "approval_policy": "{{AUTONOMY_APPROVAL_POLICY}}" if ctx.include_autonomy else "",
+            "escalation_path": "{{AUTONOMY_ESCALATION_PATH}}" if ctx.include_autonomy else "",
+        },
         "agents_map_max_lines": 120,
         "required_commands": ctx.required_commands,
         "doc_gardening_required": True,

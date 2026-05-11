@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INIT = ROOT / "skills/openai-harness-engineering/scripts/init_harness.py"
 AUDIT = ROOT / "skills/openai-harness-engineering/scripts/audit_harness.py"
+AUTONOMY_CHECK = ROOT / "skills/openai-harness-engineering/scripts/check_autonomy_readiness.py"
 NEW_PLAN = ROOT / "skills/openai-harness-engineering/scripts/new_plan.py"
 PROMPTS = ROOT / "evals/prompts.csv"
 ARTIFACTS = ROOT / "evals/artifacts"
@@ -85,11 +86,75 @@ def prepare_repo(kind: str) -> tuple[Path, Path]:
     return temp_root, repo
 
 
+def replace_in_files(repo: Path, replacements: dict[str, str]) -> None:
+    for path in repo.rglob("*"):
+        if not path.is_file() or path.suffix not in {".md", ".json"}:
+            continue
+        text = path.read_text(encoding="utf-8")
+        updated = text
+        for source, target in replacements.items():
+            updated = updated.replace(source, target)
+        if updated != text:
+            path.write_text(updated, encoding="utf-8")
+
+
+def wire_autonomy_fixture(repo: Path) -> None:
+    ok = "python3 -c 'raise SystemExit(0)'"
+    replacements = {
+        "{{INSTALL_COMMAND}}": ok,
+        "{{FULL_VALIDATION_COMMAND}}": ok,
+        "{{DEPLOY_COMMAND}}": ok,
+        "{{DEPLOY_VERIFY_COMMAND}}": ok,
+        "{{ROLLBACK_COMMAND}}": ok,
+        "{{MONITOR_COMMAND}}": ok,
+        "{{AUTONOMY_LOOP_COMMAND}}": ok,
+        "{{AUTONOMY_OBJECTIVE}}": "Keep the demo service healthy and ship validated changes.",
+        "{{AUTONOMY_TRIGGER_MODE}}": "scheduled",
+        "{{AUTONOMY_STATE_STORE}}": "docs/generated/autonomy-state.json",
+        "{{AUTONOMY_ESCALATION_PATH}}": "oncall@example.com",
+        "{{AUTONOMY_APPROVAL_POLICY}}": "human approval required for production schema changes",
+        "{{AUTONOMY_ALLOWED_ACTIONS}}": "implement code, run tests, deploy routine changes",
+        "{{AUTONOMY_APPROVAL_REQUIRED_ACTIONS}}": "schema migrations, credential rotation",
+        "{{AUTONOMY_STOP_CONDITIONS}}": "failing rollback, data loss risk, repeated deploy failures",
+        "{{AUTONOMY_STATE_SYNC_COMMAND}}": ok,
+        "{{AUTONOMY_RETRY_POLICY}}": "retry deploy twice, then escalate",
+        "{{AUTONOMY_ESCALATION_TRIGGER}}": "two consecutive failed deploy verifications",
+        "{{AUTONOMY_SHUTDOWN_COMMAND}}": ok,
+        "{{SPEC_PATH_OR_REQUEST_LINK}}": "docs/product-specs/demo-spec.md",
+        "{{DEPENDENCIES_COMMAND}}": ok,
+        "{{DEV_COMMAND}}": ok,
+        "{{HEALTH_CHECK_COMMAND}}": ok,
+        "{{HEALTH_CHECK_COMMAND_OR_URL}}": ok,
+        "{{EXPECTED_HEALTH_RESULT}}": "exit code 0",
+        "{{FORMAT_COMMAND}}": ok,
+        "{{LINT_COMMAND}}": ok,
+        "{{TYPECHECK_COMMAND}}": ok,
+        "{{UNIT_TEST_COMMAND}}": ok,
+        "{{SMOKE_COMMAND}}": ok,
+        "{{DEPENDENCY_AUDIT_COMMAND}}": ok,
+        "{{SECRET_SCAN_COMMAND}}": ok,
+        "{{SECURITY_TEST_COMMAND}}": ok,
+        "{{DEPLOY_ARTIFACT_NOTE}}": "demo-build-1",
+        "{{DEPLOY_EXPECTED_RESULT}}": "exit code 0",
+        "{{ROLLBACK_TRIGGER}}": "failed post-deploy verification",
+        "{{EXEC_PLAN_PATH}}": "docs/exec-plans/active/demo.md",
+        "{{YYYY-MM-DD}}": "2026-05-11",
+        "{{ROLLBACK_COMMAND_OR_NONE}}": ok,
+    }
+    replace_in_files(repo, replacements)
+    product_specs = repo / "docs/product-specs"
+    product_specs.mkdir(parents=True, exist_ok=True)
+    (product_specs / "demo-spec.md").write_text("# Demo Spec\n\nAutonomy fixture.\n", encoding="utf-8")
+
+
 def run_scenario(row: dict[str, str], engine: str) -> dict:
     scenario_id = row["id"]
     temp_root, repo = prepare_repo(row["kind"])
     profile = row.get("profile") or "standard"
+    primary_agent = row.get("primary_agent") or "Codex"
+    include_autonomy = row.get("include_autonomy") == "true"
     traces: list[dict] = []
+    present_files: list[str] = []
 
     try:
         if row["expect_trigger"] == "true":
@@ -133,14 +198,23 @@ def run_scenario(row: dict[str, str], engine: str) -> dict:
                             "--domains",
                             "Testing",
                             "--primary-agent",
-                            "Codex",
+                            primary_agent,
                             "--profile",
                             profile,
-                        ],
+                        ]
+                        + (["--include-autonomy"] if include_autonomy else []),
                         ROOT,
                     )
                 )
                 traces.append(direct_trace(["python3", str(AUDIT), "--target", str(repo), "--mode", "structure", "--json"], ROOT))
+                if row.get("expect_autonomy_ready") == "true":
+                    wire_autonomy_fixture(repo)
+                    traces.append(direct_trace(["python3", str(AUTONOMY_CHECK), "--target", str(repo)], ROOT))
+                present_files = sorted(
+                    str(path.relative_to(repo))
+                    for path in repo.rglob("*")
+                    if path.is_file()
+                )
         if engine == "codex":
             write_jsonl(scenario_root(scenario_id) / "codex-trace.jsonl", maybe_codex_trace(row["prompt"], ROOT))
 
@@ -150,7 +224,10 @@ def run_scenario(row: dict[str, str], engine: str) -> dict:
             "prompt": row["prompt"],
             "expect_trigger": row["expect_trigger"] == "true",
             "profile": row.get("profile") or "",
+            "primary_agent": primary_agent,
+            "include_autonomy": include_autonomy,
             "repo": str(repo),
+            "present_files": present_files,
             "traces": traces,
         }
         write_json(scenario_root(scenario_id) / "summary.json", summary)

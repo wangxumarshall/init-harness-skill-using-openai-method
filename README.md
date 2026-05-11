@@ -11,12 +11,16 @@ This skill is designed for Codex, Cursor, Claude Code, Trae, Gemini, OpenCode, a
 The skill turns a repository into a system of record for agents:
 
 - A short `AGENTS.md` map that routes agents to the smallest relevant docs.
+- A lightweight adapter layer for agent-specific entrypoints such as `CLAUDE.md`.
+- A `DELIVERY.md` lifecycle that keeps spec -> implement -> test -> verify -> deploy visible.
+- An optional `AUTONOMY.md` surface for unattended-operation policy, escalation, and checkpoint expectations.
 - Persistent execution plans under `docs/exec-plans/active/` and `docs/exec-plans/completed/`.
 - Runbooks, validation logs, and machine-readable harness metadata.
 - Deterministic scripts for initialization, harness auditing, plan creation, and drift checks.
 - An eval loop for regression-testing the skill itself.
 
 The goal is a project that survives context compaction, handoffs, and repeated changes without depending on one chat session.
+For standard and full profiles, it also keeps deployment and rollback expectations in the repo instead of in chat memory.
 
 ## Thin Harness Model
 
@@ -68,6 +72,7 @@ Useful flags:
 - `--include-frontend`
 - `--include-backend`
 - `--include-ops`
+- `--include-autonomy`
 - `--emit-adapters auto|none|all`
 - `--dry-run`
 - `--force`
@@ -105,6 +110,37 @@ Exit codes:
 - `1`: structure failures
 - `2`: workflow failures
 - `3`: both
+
+### Autonomy Readiness
+
+When a target repo should support unattended operation, scaffold the autonomy surface:
+
+```bash
+python3 skills/openai-harness-engineering/scripts/init_harness.py \
+  --target /path/to/project \
+  --project-name "Example App" \
+  --project-description "A workflow app for internal operations" \
+  --tech-stack "Next.js, TypeScript, Postgres" \
+  --domains "Users, Workflows, Notifications" \
+  --primary-agent "Codex" \
+  --profile standard \
+  --include-autonomy
+```
+
+This adds:
+
+- `AUTONOMY.md`
+- `docs/runbooks/autonomous-operations.md`
+- `docs/validation/autonomy-drill-template.md`
+- autonomy-specific manifest fields and required commands
+
+Assess whether a repo is actually wired for unattended execution:
+
+```bash
+python3 skills/openai-harness-engineering/scripts/check_autonomy_readiness.py --target /path/to/project
+```
+
+This stricter check expects real, runnable commands for validation, deploy, post-deploy verify, rollback, monitoring, and the unattended loop itself.
 
 ### Operate
 
@@ -182,6 +218,7 @@ skills/openai-harness-engineering/
 │   └── operations.md
 └── scripts/
     ├── audit_harness.py
+    ├── check_autonomy_readiness.py
     ├── check_harness_drift.py
     ├── init_harness.py
     └── new_plan.py

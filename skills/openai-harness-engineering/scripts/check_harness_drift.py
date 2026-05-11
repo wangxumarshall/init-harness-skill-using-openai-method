@@ -118,6 +118,8 @@ def main() -> None:
             issues.append("FRONTEND.md exists but manifest does not enable frontend surface")
         if "backend" not in enabled and (root / "BACKEND.md").exists():
             issues.append("BACKEND.md exists but manifest does not enable backend surface")
+        if "autonomy" not in enabled and (root / "AUTONOMY.md").exists():
+            issues.append("AUTONOMY.md exists but manifest does not enable autonomy surface")
 
     if issues:
         print("Drift issues:")

@@ -22,6 +22,7 @@ As models get stronger, the prose layer should shrink while the mechanical layer
 - Creates persistent execution-plan, validation, runbook, and manifest locations.
 - Uses `exec-plans` as the trajectory index for recoverable long-running work.
 - Audits both structure and live workflow quality.
+- Can add an autonomy surface for unattended execution policy and readiness checks.
 - Adds drift checks so the harness can shed stale or decorative structure.
 - Includes eval guidance and scripts for regression-testing the skill.
 
@@ -81,6 +82,7 @@ Useful flags:
 - `--include-frontend`
 - `--include-backend`
 - `--include-ops`
+- `--include-autonomy`
 - `--emit-adapters auto|none|all`
 - `--dry-run`
 - `--force`
@@ -96,6 +98,7 @@ After generation:
 - keep `AGENTS.md` short and routing-oriented
 - prefer scripts or CI over prose-only requirements
 - mark unresolved enforcement explicitly until it exists
+- when unattended execution is required, wire autonomy commands, escalation policy, and checkpoint storage before calling the repo ready
 
 ### 5. Operate the Harness
 
@@ -136,6 +139,18 @@ Check:
 - are placeholders still unresolved
 - is recurring cleanup reachable from the core map
 - does the skill repo itself pass its own audit
+
+If the repo should run unattended, also use:
+
+```bash
+python3 skills/openai-harness-engineering/scripts/check_autonomy_readiness.py --target .
+```
+
+Check:
+
+- is the autonomy surface enabled
+- are deploy, verify, rollback, monitor, and unattended loop commands real and runnable
+- are approval policy, state store, and escalation path wired instead of left as placeholders
 
 ### 7. Run Drift Checks and Evals
 

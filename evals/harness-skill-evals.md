@@ -16,6 +16,8 @@ Scenarios live in `evals/prompts.csv` and cover:
 - existing repo preservation
 - minimal profile init
 - standard profile init
+- autonomy surface init
+- autonomy readiness fixture
 - audit-only workflow
 - operate/create-plan workflow
 - self-repo dogfood audit
